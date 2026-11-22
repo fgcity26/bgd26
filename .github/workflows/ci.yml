@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: typecheck, lint, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bgd26
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d bgd26"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/bgd26?sslmode=disable
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/bgd26?sslmode=disable
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use the pinned Node version
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `npm test` loads .env.local with --env-file, and prisma.config.ts reads
+      # it too. Every value below is a disposable CI-only placeholder; no real
+      # secret ever enters the repository or the workflow file.
+      - name: Write CI environment
+        run: |
+          cat > .env.local <<'EOF'
+          NODE_ENV=development
+          NEXT_PUBLIC_APP_URL=http://localhost:3000
+          NEXT_PUBLIC_DEFAULT_LOCALE=bn
+          TZ=Asia/Dhaka
+          LOG_LEVEL=warn
+          DATABASE_URL="postgresql://postgres:postgres@localhost:5432/bgd26?sslmode=disable"
+          DIRECT_URL="postgresql://postgres:postgres@localhost:5432/bgd26?sslmode=disable"
+          AUTH_PROVIDER=local
+          AUTH_SECRET="ci-only-auth-secret-not-used-in-production-0001"
+          MANAGER_PIN_PEPPER="ci-only-manager-pin-pepper-0001"
+          FIELD_ENCRYPTION_KEY="ci-only-field-encryption-key-000001"
+          CRON_SECRET="ci-only-cron-secret-0000000000001"
+          RATE_LIMIT_SALT="ci-only-rate-limit-salt-0001"
+          STORAGE_PROVIDER=local
+          STORAGE_LOCAL_DIR=.data/media
+          STORAGE_LOCAL_BUCKET=local
+          SEED_OWNER_PASSWORD="Bgd26!ChangeMe"
+          SEED_OWNER_PIN="123456"
+          EOF
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Seed reference data
+        run: npm run db:seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and database tests
+        run: npm test
+
+      # The storefront renders from the database during prerender, so the build
+      # runs with the same seeded CI database.
+      - name: Production build
+        run: npm run build

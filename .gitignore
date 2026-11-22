@@ -1,0 +1,76 @@
+# ---- Secrets: must never be committed ----
+.env
+.env.*
+.env.local
+.env.local.*
+.env.development
+.env.production
+.env.test
+*.pem
+*.key
+*.p12
+secrets/
+
+# Keep the template only
+!.env.example
+
+# ---- Dependencies ----
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+.pnpm-store/
+
+# ---- Next.js ----
+.next/
+out/
+build/
+dist/
+.turbo/
+.vercel/
+next-env.d.ts
+*.tsbuildinfo
+
+# ---- Prisma ----
+prisma/*.db
+prisma/*.db-journal
+# Prisma 7 generates a TypeScript client; it is rebuilt by `prisma generate`.
+/src/generated/prisma/
+
+# ---- Test / coverage ----
+coverage/
+playwright-report/
+test-results/
+blob-report/
+.nyc_output/
+
+# ---- Logs & diagnostics ----
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pid
+*.seed
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ---- Local object storage (original gallery bytes) ----
+.data/
+
+# ---- Local scratch ----
+tmp/
+temp/
+.cache/
+playwright/.cache/
+
+# ---- Python helper scripts cache ----
+__pycache__/
+*.pyc

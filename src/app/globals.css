@@ -1,0 +1,119 @@
+@import "tailwindcss";
+
+@theme {
+  /* Bangladesh-inspired palette: bottle green + flag red accent. */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-200: #a7f3d0;
+  --color-brand-300: #6ee7b7;
+  --color-brand-400: #34d399;
+  --color-brand-500: #10b981;
+  --color-brand-600: #006a4e;
+  --color-brand-700: #00553f;
+  --color-brand-800: #064e3b;
+  --color-brand-900: #04382b;
+
+  --color-accent-500: #f42a41;
+  --color-accent-600: #d61f34;
+
+  --color-ink-900: #0f172a;
+  --color-ink-700: #334155;
+  --color-ink-500: #64748b;
+
+  --font-sans:
+    "Noto Sans Bengali", "Hind Siliguri", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  /* Never allow a horizontal scrollbar on a 360 px phone. */
+  overflow-x: hidden;
+}
+
+/* Respect users who ask the OS for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible focus for keyboard users, invisible for mouse users. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-600);
+  outline-offset: 2px;
+}
+
+/* Rendered CMS Markdown. Tailwind's typography plugin is not installed, so the
+   few elements the safe renderer emits are styled here. */
+.prose-bgd26 h1,
+.prose-bgd26 h2,
+.prose-bgd26 h3,
+.prose-bgd26 h4 {
+  color: var(--color-ink-900);
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 1.5em;
+}
+
+.prose-bgd26 h1 { font-size: 1.6rem; }
+.prose-bgd26 h2 { font-size: 1.35rem; }
+.prose-bgd26 h3 { font-size: 1.15rem; }
+
+.prose-bgd26 ul,
+.prose-bgd26 ol {
+  padding-left: 1.4rem;
+}
+
+.prose-bgd26 ul { list-style: disc; }
+.prose-bgd26 ol { list-style: decimal; }
+
+.prose-bgd26 li { margin: 0.3rem 0; }
+
+.prose-bgd26 blockquote {
+  border-left: 3px solid var(--color-brand-300);
+  color: var(--color-ink-500);
+  padding-left: 1rem;
+}
+
+.prose-bgd26 code {
+  background: #f1f5f9;
+  border-radius: 0.35rem;
+  font-size: 0.9em;
+  padding: 0.1rem 0.35rem;
+}
+
+.prose-bgd26 pre {
+  background: #0f172a;
+  border-radius: 0.75rem;
+  color: #e2e8f0;
+  overflow-x: auto;
+  padding: 1rem;
+}
+
+.prose-bgd26 pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.prose-bgd26 a {
+  color: var(--color-brand-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose-bgd26 hr {
+  border-color: #e2e8f0;
+  margin: 1.5rem 0;
+}
+

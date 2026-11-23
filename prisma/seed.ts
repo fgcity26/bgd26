@@ -102,6 +102,7 @@ const ROLE_MATRIX: Record<
       "customer.write",
       "pos.read",
       "pos.write",
+      "ai.read",
       "payment.read",
       "payment.write",
       "refund.write",

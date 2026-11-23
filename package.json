@@ -28,6 +28,7 @@
     "verify:production": "tsx scripts/verify-production.mts",
     "verify:dropship": "tsx scripts/verify-dropship.mts",
     "verify:account": "tsx scripts/verify-account.mts",
+    "verify:ai": "tsx scripts/verify-ai.mts",
     "verify:invariants": "node scripts/verify-invariants.mjs",
     "format": "prettier --write .",
     "db:validate": "prisma validate",

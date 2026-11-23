@@ -3016,7 +3016,11 @@ model AiConversationLog {
   status         AiConversationStatus @default(ACTIVE)
   startedAt      DateTime             @default(now())
   endedAt        DateTime?
+  lastMessageAt  DateTime?
   messageCount   Int                  @default(0)
+  // Live-provider usage, summed per turn. The local rules adapter reports zero.
+  inputTokens    Int                  @default(0)
+  outputTokens   Int                  @default(0)
   createdAt      DateTime             @default(now())
 
   user     User?     @relation("AiConversationUser", fields: [userId], references: [id], onDelete: SetNull)
@@ -3026,6 +3030,7 @@ model AiConversationLog {
 
   @@index([customerId, startedAt])
   @@index([channel, startedAt])
+  @@index([userId, startedAt])
   @@map("ai_conversation_logs")
 }
 

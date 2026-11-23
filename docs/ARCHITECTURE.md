@@ -1300,6 +1300,11 @@ indexed for fast paging.
 
 ### 18.3 AI boundaries
 
+> **Built today (module 10):** the staff-console assistant at `/assistant`. It
+> answers product, stock, delivery and order questions and creates a draft
+> order. The WhatsApp channel below (18.1–18.2) is the target for module 4c and
+> is not wired yet.
+
 The assistant is a **read + draft** agent. It can answer questions from live
 database tools and create a DRAFT order. It cannot move money or stock.
 
@@ -1307,7 +1312,7 @@ database tools and create a DRAFT order. It cannot move money or stock.
 | --- | --- | --- |
 | Search products, prices, stock | yes (read) | tool returns DB values only |
 | Quote delivery charge/ETA | yes (read) | `delivery_zones` lookup |
-| Order status, tracking | yes (read) | scoped to the customer's own orders |
+| Order status, tracking | yes (read) | staff session; order-number lookup with the mobile masked |
 | Create draft order | yes | `orders.status = DRAFT`, `aiDraft = true` |
 | Reserve stock | **no** | reservation service requires `CONFIRMED` and staff/customer confirmation |
 | Apply discount > policy | **no** | server revalidates every line; assistant cannot set price |
@@ -1325,17 +1330,26 @@ Additional guardrails:
   injection cannot escalate permissions because every tool re-checks RBAC and
   business rules server-side.
 - Every tool call writes `ai_action_logs` (input, output, status, risk level,
-  duration). Conversation metadata writes `ai_conversation_logs`.
-- PII is minimised in prompts; phone numbers are masked where full value is not
-  needed.
-- Rate limits per customer/session and a monthly token budget. On provider
-  failure the assistant degrades to "human handover", never blocks checkout.
+  duration), including blocked and failed calls. Conversation metadata writes
+  `ai_conversation_logs`.
+- PII is minimised in prompts; phone numbers are masked in tool output and in
+  the audit row.
+- Rate limits per user and a monthly token budget are counted from durable rows,
+  so a restart does not reset them. On provider failure the assistant degrades
+  to "human handover", never blocks checkout.
 - Bangla, English and Banglish are supported; the assistant replies in the
-  customer's language and uses plain language, never accounting jargon.
+  user's language and uses plain language, never accounting jargon.
+- `AI_PROVIDER=local` is a deterministic rules engine that needs no key. A live
+  provider is used only when `AI_PROVIDER=openai` **and** `AI_API_KEY` is set;
+  otherwise the app falls back and shows a notice.
 
-Draft-order flow: AI proposes items → customer confirms in chat → server
-revalidates price/stock → creates `DRAFT` order (no reservation) → sends a
-payment/checkout link → payment + staff confirmation moves it to `CONFIRMED`.
+Draft-order flow (module 10): staff asks for a draft with a customer mobile,
+SKUs and a delivery zone → `create_draft_order` re-reads price, VAT, stock and
+the zone charge → creates a `DRAFT` order with no reservation, payment, journal,
+loyalty or supplier order → staff review the order page → `convertAiDraft` locks
+the draft, runs the ordinary `createSale`, and marks the draft `CANCELLED`.
+Direct `DRAFT → CONFIRMED` is refused for an AI draft, and cancelling a draft is
+status-only so no phantom stock return is posted.
 
 ---
 

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DraftConversionForm } from "@/components/ai/draft-conversion-form";
 import { CancelOrderForm, OrderStatusForm } from "@/components/orders/order-actions";
 import { OrdersNav } from "@/components/orders/orders-nav";
 import { RefundForm, type RefundableItem } from "@/components/orders/refund-form";
@@ -89,6 +90,7 @@ export default async function OrderDetailPage({
   const { error, ok } = await searchParams;
 
   const canWriteOrder = hasPermission(session, "order.write");
+  const canWriteAi = hasPermission(session, "ai.write");
   const canApproveOrder = hasPermission(session, "order.approve");
   const canWriteRefund = hasPermission(session, "refund.write");
   const canWriteShipment = hasPermission(session, "shipment.write");
@@ -116,6 +118,7 @@ export default async function OrderDetailPage({
       cancelReason: true,
       isWalkInCash: true,
       walkInReason: true,
+      aiDraft: true,
       internalNote: true,
       customerNote: true,
       offlineCreatedAt: true,
@@ -292,6 +295,15 @@ export default async function OrderDetailPage({
           Walk-in cash sale{order.walkInApprover ? ` approved by ${order.walkInApprover.fullName}` : ""}.
           {order.walkInReason ? ` ${order.walkInReason}.` : ""}
         </p>
+      ) : null}
+      {order.aiDraft ? (
+        <div className="rounded-xl bg-brand-50 px-3 py-2 text-sm text-brand-900 ring-1 ring-brand-200">
+          <p className="font-semibold">Assistant draft · সহায়কের ড্রাফট</p>
+          <p className="mt-1 text-brand-800">
+            This draft reserved no stock, took no payment and posted no journal. Convert it to a
+            sale to re-price every line and reserve stock.
+          </p>
+        </div>
       ) : null}
       {order.internalNote ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
@@ -561,7 +573,19 @@ export default async function OrderDetailPage({
             </section>
           ) : null}
 
-          {canWriteOrder ? (
+          {order.aiDraft && order.status === "DRAFT" && canWriteOrder && canWriteAi ? (
+            <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-brand-200">
+              <h2 className="text-sm font-semibold">Convert draft to sale</h2>
+              <p className="mt-1 text-xs text-ink-500">
+                The sale re-checks price, VAT, stock and delivery on the server.
+              </p>
+              <div className="mt-3">
+                <DraftConversionForm draftOrderId={order.id} />
+              </div>
+            </section>
+          ) : null}
+
+          {canWriteOrder && !(order.aiDraft && order.status === "DRAFT") ? (
             <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
               <h2 className="text-sm font-semibold">Status</h2>
               <div className="mt-3">

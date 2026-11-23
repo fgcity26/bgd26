@@ -101,7 +101,9 @@ export default async function DashboardPage() {
           raises the supplier order from the sale, ships direct and recognises the supplier cost
           once. Customers can now keep an optional online account: the mobile number is the login,
           with order history, saved addresses and a points ledger, and a signed-in checkout can
-          spend points against the same capped balance as the counter. WhatsApp comes next.
+          spend points against the same capped balance as the counter. The assistant answers
+          product, stock, delivery and order questions from live data and can create a draft order;
+          it never takes payment, moves stock or posts a journal. WhatsApp comes next.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink-500">
           পণ্য, স্টক, ক্রয়, ক্রেতা, রিভিউ, সাইটের পাতা, কাউন্টার, বিক্রয় খাতা ও হিসাব চালু হয়েছে।
@@ -123,7 +125,9 @@ export default async function DashboardPage() {
           তৈরি করে, সরাসরি পাঠায় ও সরবরাহকারীর খরচ একবারই হিসাবে নেয়। ক্রেতা এখন চাইলে অনলাইন
           অ্যাকাউন্ট রাখতে পারেন—মোবাইল নম্বরই লগইন, সাথে অর্ডারের ইতিহাস, সংরক্ষিত ঠিকানা ও
           পয়েন্টের খাতা; লগইন করা ক্রেতা কাউন্টারের মতোই নির্ধারিত সীমার মধ্যে পয়েন্ট খরচ
-          করতে পারেন। এরপর হোয়াটসঅ্যাপ আসবে।
+          করতে পারেন। সহায়ক পণ্য, স্টক, ডেলিভারি ও অর্ডারের প্রশ্নের উত্তর সরাসরি ডেটাবেস
+          থেকে দেয় এবং একটি ড্রাফট অর্ডার তৈরি করতে পারে; টাকা নেওয়া, স্টক বদলানো বা জার্নাল
+          পোস্ট করা তার ক্ষমতা নেই। এরপর হোয়াটসঅ্যাপ আসবে।
         </p>
       </section>
     </div>

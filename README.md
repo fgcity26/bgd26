@@ -27,8 +27,10 @@ issue — is complete and approved (19 Nov 2026). Phase 3 module 8 — prepaid
 dropshipping, supplier orders, direct shipments and dropship cost of goods sold —
 is complete and approved (20 Nov 2026). Phase 3 module 9 — customer accounts,
 saved addresses, order history and online loyalty redemption — is complete and
-awaits owner approval. WhatsApp notifications (4c) are skipped until their
-credentials arrive. See `docs/PHASE_2_STATUS.md`.
+approved (22 Nov 2026). Phase 3 module 10 — a read-and-draft AI assistant with
+live product, delivery and order lookups — is complete and awaits owner
+approval. WhatsApp notifications (4c) are skipped until their credentials
+arrive. See `docs/PHASE_2_STATUS.md`.
 
 ## Requirements
 
@@ -455,6 +457,44 @@ addresses prefill the form, and the points box allows spending up to
 the live balance and cap are re-checked inside the sale transaction. A forgotten
 password is reset manually by the shop until an SMS or WhatsApp channel exists.
 
+## AI assistant
+
+The assistant lives at `/assistant` and is for staff only (`ai.read`). It answers
+questions about products, prices, stock, delivery charges and order status from
+the live database, and can create one **draft** order. It cannot take payment,
+refund, discount, adjust stock, post a journal, message a customer or edit a
+customer record; those requests get a plain handover to a colleague.
+
+It runs on an adapter port with two implementations. `local` is a deterministic
+rules engine that needs no API key and works offline — the default. `openai`
+uses Chat Completions tool calling and is reached only when
+`AI_PROVIDER=openai` **and** `AI_API_KEY` is set; otherwise the app falls back to
+`local` and says so on the page. A provider timeout, HTTP error or exhausted
+limit becomes a handover message, never a blocked page or checkout.
+
+The model never gets SQL, credentials or a raw table. It can only name one of
+four allow-listed tools, each with a Zod schema and a server-side permission
+check:
+
+| Tool | Risk | What it does |
+| --- | --- | --- |
+| `search_products` | read | Published products and variants with live price, VAT rate, default-warehouse stock and fulfilment type |
+| `get_order_status` | read | One order by number: status, payment, total, items, masked mobile and tracking |
+| `quote_delivery` | read | Active zones with charge, day range and the free-shipping threshold applied to a subtotal |
+| `create_draft_order` | draft | A `DRAFT` order with `source = AI_DRAFT` and `aiDraft = true`; no stock, payment, journal, loyalty or supplier order |
+
+A draft is real paper but inert. Converting it on the order page locks the draft,
+runs the ordinary `createSale` (`ADMIN`, COD/bKash/Nagad) so every line is
+re-priced and stock is reserved, then marks the draft `CANCELLED`. An AI draft
+cannot be confirmed directly, and cancelling a draft is status-only so no
+phantom `SALE_RETURN` is written.
+
+Every tool call — including `BLOCKED` and `ERROR` — goes to `ai_action_logs`
+with a masked mobile and a duration. One `assistant.turn` row per request powers
+the durable hourly limits, so a restart cannot reset them. Defaults: 60
+requests/hour, 10 drafts/hour, 4 tool rounds, 1,200 output tokens, a 20-second
+provider timeout and no monthly token budget. Cashiers have `ai.read` only.
+
 ## Shipping, couriers and COD remittance
 
 Shipping lives under **Shipping**: the consignment list, booking, courier
@@ -522,7 +562,7 @@ until then the console shows the confirmation link so the flow can be tested.
 | `npm run db:local:detach` | Same, in the background |
 | `npm run env:setup` | Interactive `.env.local` writer |
 | `npm run secrets:init` | Generate missing app secrets (`AUTH_SECRET`, pepper, …) |
-| `npm test` | Unit + database tests for auth, RBAC, pricing, media, CRM, CMS, inventory, purchasing, supplier settlement, production, dropshipping, sales, accounting, loyalty, the storefront, customer accounts, shipping and the financial statements (serial, for PGlite) |
+| `npm test` | Unit + database tests for auth, RBAC, pricing, media, CRM, CMS, inventory, purchasing, supplier settlement, production, dropshipping, sales, accounting, loyalty, the storefront, customer accounts, shipping, the financial statements and the AI assistant (serial, for PGlite) |
 | `npm run verify:auth` | HTTP auth checks against a running `npm start` |
 | `npm run verify:catalog` | HTTP catalog + media checks against a running `npm start` |
 | `npm run verify:crm` | HTTP CRM/CMS checks against a running `npm start` |
@@ -532,6 +572,7 @@ until then the console shows the confirmation link so the flow can be tested.
 | `npm run verify:production` | HTTP production job, design approval, material issue, completion, cancellation and permission checks against a running `npm start` |
 | `npm run verify:dropship` | HTTP dropship list, detail, supplier-order transitions, direct shipment, cost of goods sold, prepaid guard and permission checks against a running `npm start` |
 | `npm run verify:account` | HTTP customer login redirects, account dashboard, order history, ownership isolation, addresses, points, profile, token separation and account-aware checkout checks against a running `npm start` |
+| `npm run verify:ai` | HTTP assistant access, provider/guardrail state, product, delivery and order answers, draft inertness, conversion and audit masking checks against a running `npm start` |
 | `npm run verify:orders` | HTTP till, order, payment, refund and shift checks against a running `npm start` |
 | `npm run verify:accounting` | HTTP trial-balance, journal, ledger and expense checks against a running `npm start` |
 | `npm run verify:loyalty` | HTTP loyalty overview, ledger, POS preview and journal checks against a running `npm start` |
@@ -557,6 +598,7 @@ prisma/
     20261119210000_dropship/   dropship statuses, timestamps and one order per supplier
     20261119220000_dropship_shipments/ one live direct shipment per supplier
     20261120090000_customer_accounts/ storefront password, lockout and claim columns
+    20261122090000_ai_assistant/ assistant message/token counters and user timeline index
   seed.ts                      idempotent reference data
 prisma.config.ts               Prisma 7 CLI config (loads .env.local)
 src/
@@ -580,6 +622,7 @@ src/
     (storefront)/account/      login, register, dashboard, orders, addresses, points, profile
     api/storefront/            cart-count and coupon preview endpoints
     (admin)/customers/         customer list, create and detail/edit
+    (admin)/assistant/         assistant console: chat, draft form, audit and guardrails
     (admin)/reviews/           review moderation and staff-recorded reviews
     (admin)/pages/             CMS page list, create and detail/edit
     (admin)/newsletter/        subscriber list and double opt-in status
@@ -598,6 +641,7 @@ src/
   components/shipping/         shipment, tracking, courier and remittance forms + nav
   components/storefront/       public header, product card, cart, coupon, checkout and track forms
   components/crm/              customer, address, note and review forms
+  components/ai/               assistant chat, manual draft form and draft conversion form
   components/cms/              page form
   components/newsletter/       subscriber form
   generated/prisma/            generated client (gitignored)
@@ -656,6 +700,7 @@ tests/
   production.test.ts           job guard, design flow, issue WIP, completion COGS and cancellation return
   dropship.test.ts             auto supplier orders, grouping, ship COGS, prepaid guard, delivery and cancel
   customer-account.test.ts     registration/claim, lockout, addresses, online redemption and order isolation
+  ai-assistant.test.ts         tool allow-list, live lookups, inert draft, conversion, limits and audit masking
 docs/
   ARCHITECTURE.md              the engineering contract
   ER_DIAGRAM.md                generated ER diagram
@@ -673,5 +718,8 @@ docs/
    `NEXT_PUBLIC_` or imported into a client component.
 4. Posted journals, `stock_ledger` and `audit_logs` are immutable at the
    database level. Corrections are reversals, never edits.
-5. If a credential is exposed: revoke it first, then rotate, then update
+5. The assistant reads and drafts only. It cannot take payment, refund,
+   discount, adjust stock, post a journal or send a message, and every tool
+   call is logged with the customer's mobile masked.
+6. If a credential is exposed: revoke it first, then rotate, then update
    `.env.local`.

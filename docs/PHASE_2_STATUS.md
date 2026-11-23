@@ -68,13 +68,23 @@ and creates a direct shipment with no warehouse. A sale split across suppliers
 gets one direct parcel per supplier and only closes when the last parcel arrives.
 Cancelling the sale cancels open supplier orders and is refused after shipment.
 
-**Phase 3 module 9 complete, awaiting owner approval (22 November 2026).** Customer
-accounts now sit on top of guest checkout. The mobile number is the identity; a
-guest record with orders is claimed with one matching order number. A separate
-signed customer cookie opens order history, saved addresses, the points ledger
-and a password-protected profile. A signed-in checkout forces the account's own
-mobile and allows spending points up to 20 % of net merchandise through the same
+**Phase 3 module 9 complete and approved (22 November 2026).** Customer accounts
+now sit on top of guest checkout. The mobile number is the identity; a guest
+record with orders is claimed with one matching order number. A separate signed
+customer cookie opens order history, saved addresses, the points ledger and a
+password-protected profile. A signed-in checkout forces the account's own mobile
+and allows spending points up to 20 % of net merchandise through the same
 redemption engine as the counter.
+
+**Phase 3 module 10 complete, awaiting owner approval (23 November 2026).** The
+staff console now has an assistant that answers product, stock, delivery and
+order questions from the live database and can create a **draft** order. It
+cannot take payment, refund, discount, adjust stock or post a journal. It runs
+with no API key on a deterministic rules adapter, and switches to an
+OpenAI-compatible model only when a key is configured. Every tool call is
+audited, mobile numbers are masked, drafts reserve nothing, and converting a
+draft runs the ordinary sale engine so prices, VAT, stock and the journal are
+re-checked before anything real happens.
 
 ## Module 1 — scaffold, database, seed
 
@@ -1255,7 +1265,7 @@ npm run typecheck / lint / build      → clean (90 routes)
    Closing the sale on the first parcel would tell the customer that everything
    had arrived while another supplier was still preparing the rest.
 
-## Phase 3, module 9 — customer accounts and online loyalty redemption (awaiting approval)
+## Phase 3, module 9 — customer accounts and online loyalty redemption (approved 22 November 2026)
 
 | Area | Detail |
 | --- | --- |
@@ -1346,6 +1356,89 @@ npm run typecheck / lint / build      → clean (98 routes)
     tells the customer to message the shop, and staff reset after checking the
     last order. Inventing an insecure reset would be worse than a slow one.
 
+## Phase 3, module 10 — AI assistant, read and draft only (awaiting approval)
+
+| Area | Detail |
+| --- | --- |
+| Scope | A staff-console assistant (`ADMIN` channel). No public widget and no WhatsApp path. It answers questions and may create one **draft** order. It cannot take payment, issue a refund, change a price, apply a discount, adjust stock, post a journal or send marketing. |
+| Provider | An adapter port (`src/lib/adapters/ai/`) with two implementations. `local` is a deterministic rules engine that needs no key and works offline; `openai` uses Chat Completions tool calling. `AI_PROVIDER` picks one, but a missing `AI_API_KEY` falls back to `local` and the console says so. |
+| Tools | Four allow-listed tools: `search_products` (read), `get_order_status` (read), `quote_delivery` (read) and `create_draft_order` (draft). Each has a Zod schema and a server-side permission check; an unknown name is refused and logged `BLOCKED`. |
+| Live data | Prices, VAT, stock at the default warehouse, delivery charges and order state are always read from the database inside the call. The model never supplies a number, and the prompt tells it to treat tool output as data, not instructions. |
+| Draft order | A real `Order` with `status = DRAFT`, `source = AI_DRAFT`, `aiDraft = true` and a status-history row. It reserves no stock, creates no payment, posts no journal, earns no loyalty and raises no dropship purchase order. |
+| Conversion | `convertAiDraft` locks the draft row, calls the ordinary `createSale` (`source = ADMIN`, COD/bKash/Nagad) so every line is re-priced and stock is reserved, then marks the draft `CANCELLED`. The draft itself never moved stock or money. |
+| Direct confirmation | `setOrderStatus` refuses to move an AI draft from `DRAFT` to `CONFIRMED`; conversion is the only sale path. Cancelling a draft is a status-only change, so it never invents a `SALE_RETURN` for goods that never left. |
+| Audit | Every tool call, including `BLOCKED` and `ERROR`, is written to `ai_action_logs` with duration and a masked mobile. One `assistant.turn` row per request powers the durable hourly limit, so a restart does not reset it. |
+| Limits | `AI_REQUESTS_PER_HOUR` (60) per user, `AI_MAX_DRAFTS_PER_HOUR` (10), a bounded tool loop (`AI_MAX_TOOL_ROUNDS` 4, `AI_MAX_TOOL_CALLS_PER_TURN` 5) and an optional monthly token budget (`AI_MONTHLY_TOKEN_BUDGET`, 0 = unlimited). |
+| Failure | Provider timeout, HTTP error, rate limit or budget exhaustion ends in a human handover message. The assistant never blocks checkout, the till or a page render. |
+| Blast radius | `CASHIER` gained `ai.read` only; `OWNER` and `MANAGER` have `ai.*` through the wildcard. The assistant page and the order conversion panel check `ai.read` and `ai.write` (plus `order.write` for a sale) on the server. |
+| Routes | `/assistant` (chat, manual draft form, recent drafts, recent tool calls, guardrail status). `/orders/[id]` gains an assistant-draft banner and the conversion panel. |
+
+```text
+npm test                    → 145/145 (133 existing + 12 assistant; rolled back)
+npm run verify:ai           → 11/11 (against `next start`, real HTTP)
+  an anonymous visitor is sent to the staff login
+  a role without ai.read is sent to the forbidden screen
+  the owner sees the assistant, provider and draft form
+  the assistant page offers product, delivery and order prompts
+  the assistant draft appears with its review banner
+  a product question is answered from the live catalogue
+  a delivery question reads the zone table and free threshold
+  the draft moved no stock, payment or journal
+  converting the draft creates a real sale and posts a balance
+  an order answer masks the customer's mobile
+  an unknown tool is refused and recorded
+
+npm run verify:dropship               → 14/14 (re-run after module 10)
+npm run verify:production             → 11/11 (re-run after module 10)
+npm run verify:reports                → 8/8   (re-run after module 10)
+npm run verify:shipping               → 10/10 (re-run after module 10)
+npm run verify:storefront             → 14/14 (re-run after module 10)
+npm run verify:loyalty                → 9/9   (re-run after module 10)
+npm run verify:orders                 → 13/13 (re-run after module 10)
+npm run verify:accounting             → 12/12 (re-run after module 10)
+npm run verify:account                → 15/15 (re-run after module 10)
+npm run verify:inventory              → 9/9   (re-run after module 10)
+npm run verify:purchasing             → 9/9   (re-run after module 10)
+npm run verify:purchasing-settlement  → 11/11 (re-run after module 10)
+npm run verify:auth                   → 9/9   (re-run after module 10)
+npm run verify:catalog                → 8/8   (re-run after module 10)
+npm run verify:crm                    → 8/8   (re-run after module 10)
+npm run verify:invariants             → 10/10
+npm run schema:check                  → OK (90 tables / 81 enums)
+npm run typecheck / lint / build      → clean (99 routes)
+```
+
+### Design decisions locked in this module
+
+1. **The assistant is a tool call, not a database client.** It can only name one
+   of four allow-listed functions. It never sees SQL, a credential or a raw
+   table, so a prompt injection has nothing to reach for.
+2. **Every fact comes from the database.** Price, VAT, stock, delivery charge
+   and order status are read inside the call. A model that invents a number
+   cannot make the shop quote it.
+3. **Draft only, and the draft is inert.** A draft reserves no stock, takes no
+   payment, posts no journal and raises no supplier order. The worst a
+   misheard request can do is create a reviewable piece of paper.
+4. **Conversion re-runs the sale engine.** Conversion does not "confirm" the
+   draft; it creates a new sale through `createSale`, which re-prices every
+   line, reserves stock, posts the journal and creates the pending payment.
+   That is why a draft cannot be confirmed directly.
+5. **Cancelling a draft is status-only.** Running the normal cancellation path
+   would write a `SALE_RETURN` for goods that never left, inventing stock. The
+   early return in `cancelOrder` prevents phantom inventory.
+6. **A missing key degrades, never breaks.** `local` is the default and needs
+   nothing. Requesting `openai` without a key falls back with a visible notice.
+   A provider outage becomes a human handover.
+7. **Audit is not optional.** Blocked and failed calls are logged too, because
+   the interesting events are the requests the assistant refused.
+8. **Mobile numbers are masked before storage.** Staff reading the audit trail
+   do not need a customer's full number, and a masked log cannot leak one.
+9. **Limits are durable, not in memory.** The hourly counters read
+   `ai_action_logs`, so a restart or a second worker cannot reset them.
+10. **The counter keeps read-only access.** Cashiers may ask for a price or an
+    order state; they may not create drafts or convert them. That keeps the
+    risky step with the people who already own order write access.
+
 ## Running it locally
 
 ```bash
@@ -1381,12 +1474,13 @@ check and is not supported by Next 16 or Prisma 7.
 > can restore it from the dashboard. Everything above is verified against a
 > local PostgreSQL 17.5 instance in the meantime.
 
-## Next: after module 9
+## Next: after module 10
 
 Modules 4a (accounting), 4b (loyalty), 5a (storefront), 5b (shipping), 5c
-(financial statements), 6 (supplier settlement), 7 (engraving production) and 8
-(dropshipping) are built and approved; module 9 (customer accounts) waits for
-approval. Module 4c (WhatsApp) was skipped for now and needs its own gate:
+(financial statements), 6 (supplier settlement), 7 (engraving production), 8
+(dropshipping), 9 (customer accounts) and 10 (assistant) are built; module 10
+waits for approval. Module 4c (WhatsApp) was skipped for now and needs its own
+gate:
 
 1. **4c — WhatsApp.** Official Cloud API only: template messages for order
    confirmation, shipping and refund updates, opt-in tracking, delivery receipts
@@ -1395,10 +1489,11 @@ approval. Module 4c (WhatsApp) was skipped for now and needs its own gate:
 
 The remaining backlog, each with its own gate: courier API adapters for Pathao,
 Steadfast and RedX; an automated customer password-reset channel (SMS or
-WhatsApp, once 4c exists); and an AI assistant on draft-only output.
-Dropshipping is complete for prepaid orders, so an online sale can now send the
-supplier order, ship direct and settle the supplier without a spreadsheet. COD
-dropship needs a remittance design before it can be offered.
+WhatsApp, once 4c exists); and a live AI provider key if the owner wants a
+language model instead of the deterministic rules engine. Dropshipping is
+complete for prepaid orders, so an online sale can now send the supplier order,
+ship direct and settle the supplier without a spreadsheet. COD dropship needs a
+remittance design before it can be offered.
 
 ## সংক্ষেপে
 
@@ -1545,13 +1640,34 @@ balance), হিসাবের তালিকা, খাতা (ledger), জ�
 দোকানে যোগাযোগ করে ম্যানুয়ালি রিসেট করাতে হয়; এসএমএস/হোয়াটসঅ্যাপ চ্যানেল
 এখনো নেই।
 
-১৩৩টি ইউনিট টেস্ট, ১৫টি অ্যাকাউন্ট HTTP যাচাই, ১৪টি ড্রপশিপ HTTP যাচাই, ১১টি
-উৎপাদন HTTP যাচাই, ১১টি সরবরাহকারী নিষ্পত্তি HTTP যাচাই, ৮টি বিবরণী HTTP যাচাই,
-১০টি চালান HTTP যাচাই, ১৪টি দোকান HTTP যাচাই, ৯টি লয়্যালটি HTTP যাচাই, ১২টি
-হিসাব যাচাই, ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই, ৯টি ক্রয় যাচাই, ৯টি লগইন
-যাচাই, ৮টি ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি ডেটাবেস নিয়ম যাচাই সফল।
-চালান (৫বি), লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক বিবরণী (৫সি), সরবরাহকারী
-নিষ্পত্তি (৬), উৎপাদন (৭) ও ড্রপশিপ (৮) অনুমোদিত; ক্রেতার অ্যাকাউন্ট (৯) আপনার
-অনুমোদনের অপেক্ষায়। হোয়াটসঅ্যাপ (৪সি) আপনার নির্দেশে আপাতত বন্ধ, ও তার তথ্য
-পেলে শুরু হবে।
+মডিউল ১০-এ স্টাফ কনসোলের সহায়ক যুক্ত হয়েছে। এটি পণ্যের দাম ও স্টক, ডেলিভারি
+চার্জ এবং অর্ডারের অবস্থা সরাসরি ডেটাবেস থেকে বলে, আর চাইলে একটি **ড্রাফট**
+অর্ডার তৈরি করে। টাকা নেওয়া, ফেরত দেওয়া, ছাড় দেওয়া, স্টক বদলানো বা জার্নাল
+পোস্ট করা এর ক্ষমতা নেই। চারটি অনুমোদিত টুল ছাড়া এটি কিছুই চালাতে পারে না—
+প্রতিটির নিজস্ব যাচাই ও সার্ভারে পারমিশন চেক আছে; অজানা টুল ব্লক হয়ে অডিটে
+লেখা হয়। বাইরের মডেল ছাড়াই একটি লোকাল নিয়ম-ইঞ্জিন কাজ করে, তাই কোনো API key
+না থাকলেও সহায়ক চলে; `AI_PROVIDER=openai` ও key দিলে OpenAI-সামঞ্জস্যপূর্ণ
+মডেল ব্যবহার হয়, key না থাকলে আবার লোকাল ইঞ্জিনে ফিরে যায় এবং কনসোল তা জানায়।
+দাম, ভ্যাট, স্টক, ডেলিভারি চার্জ ও অর্ডারের অবস্থা কখনো মডেল ঠিক করে না—সবই
+সার্ভারে ডেটাবেস থেকে পড়া হয়। ড্রাফট অর্ডার সত্যিকারের `Order` হলেও শুধু
+`DRAFT`: স্টক আটকায় না, পেমেন্ট তৈরি হয় না, জার্নাল পোস্ট হয় না, লয়্যালটি
+জমা হয় না, ড্রপশিপ ক্রয় অর্ডারও ওঠে না। ড্রাফট সরাসরি কনফার্ম করা যায় না—
+রূপান্তর করলে সাধারণ বিক্রয় ইঞ্জিন আবার সব লাইনের দাম যাচাই করে, স্টক আটকায়,
+জার্নাল পোস্ট করে ও অপেক্ষমাণ পেমেন্ট তৈরি করে; তারপর ড্রাফটটি বাতিল হিসেবে
+বন্ধ হয়। ড্রাফট বাতিল করলে শুধু স্টেটাস বদলায়, তাই যে মাল কখনো বের হয়নি তার
+জন্য ভুয়া স্টক ফেরত লেখা হয় না। প্রতিটি টুল কল—সফল, ব্লক বা ত্রুটি—অডিট
+লগে লেখা হয়, মোবাইল নম্বর মাস্ক করা থাকে। প্রতি ঘণ্টায় ব্যবহারের সীমা
+ডেটাবেস থেকেই গোনা হয়, তাই সার্ভার রিস্টার্টে রিসেট হয় না; প্রদানকারী ব্যর্থ
+হলে সহায়ক মানুষকে হস্তান্তর করে, কখনো বিক্রি বা কাউন্টার আটকায় না। ক্যাশিয়ার
+শুধু পড়তে পারেন, ড্রাফট তৈরি বা রূপান্তর করতে পারেন না।
+
+১৪৫টি ইউনিট টেস্ট, ১১টি সহায়ক HTTP যাচাই, ১৫টি অ্যাকাউন্ট HTTP যাচাই, ১৪টি
+ড্রপশিপ HTTP যাচাই, ১১টি উৎপাদন HTTP যাচাই, ১১টি সরবরাহকারী নিষ্পত্তি HTTP
+যাচাই, ৮টি বিবরণী HTTP যাচাই, ১০টি চালান HTTP যাচাই, ১৪টি দোকান HTTP যাচাই,
+৯টি লয়্যালটি HTTP যাচাই, ১২টি হিসাব যাচাই, ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই,
+৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি
+ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি), লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক
+বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬), উৎপাদন (৭), ড্রপশিপ (৮) ও ক্রেতার
+অ্যাকাউন্ট (৯) অনুমোদিত; সহায়ক (১০) আপনার অনুমোদনের অপেক্ষায়। হোয়াটসঅ্যাপ
+(৪সি) আপনার নির্দেশে আপাতত বন্ধ, ও তার তথ্য পেলে শুরু হবে।
 

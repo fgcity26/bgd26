@@ -30,6 +30,12 @@ const NAV: Array<NavItem & { anyOf?: string[] }> = [
     anyOf: ["order.read"],
   },
   {
+    href: "/assistant",
+    label: "Assistant",
+    labelBn: "সহায়ক",
+    anyOf: ["ai.read"],
+  },
+  {
     href: "/payments",
     label: "Payments",
     labelBn: "পেমেন্ট",

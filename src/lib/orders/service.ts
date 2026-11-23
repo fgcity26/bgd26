@@ -1000,9 +1000,17 @@ export async function setOrderStatus(
   await run(outer, async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      select: { id: true, status: true, orderNumber: true },
+      select: { id: true, status: true, orderNumber: true, aiDraft: true },
     });
     if (!order) throw new OrdersError("That order no longer exists.");
+    // An AI draft has no stock, payment or journal behind it. Confirming it
+    // directly would tell the shop a sale happened when nothing did, so staff
+    // must convert it through the sale path (which re-prices and reserves).
+    if (order.aiDraft && order.status === "DRAFT" && next === "CONFIRMED") {
+      throw new OrdersError(
+        "An AI draft cannot be confirmed directly. Convert it to a sale so prices are re-checked and stock is reserved.",
+      );
+    }
     if (!canTransition(order.status, next)) {
       throw new OrdersError(
         `An order cannot move from ${order.status.replaceAll("_", " ").toLowerCase()} to ${next
@@ -1068,6 +1076,31 @@ export async function cancelOrder(
     if (!order) throw new OrdersError("That order no longer exists.");
     if (!canTransition(order.status, "CANCELLED")) {
       throw new OrdersError("This order can no longer be cancelled.");
+    }
+
+    // A draft never reserved stock, took payment or posted a journal. Running
+    // the return/reversal path would invent a SALE_RETURN and put stock on the
+    // shelf that never left, so cancelling a draft is only a status change.
+    if (order.status === "DRAFT") {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelReason: reason.trim() || null,
+        },
+      });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: order.id,
+          field: "ORDER_STATUS",
+          fromValue: "DRAFT",
+          toValue: "CANCELLED",
+          note: reason.trim() || null,
+          actorUserId,
+        },
+      });
+      return;
     }
 
     // A supplier order that already shipped cannot be pulled back. Once the

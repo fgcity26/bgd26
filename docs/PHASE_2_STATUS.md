@@ -1468,11 +1468,15 @@ npm run dev
 The project requires **Node 22+** (`.nvmrc` pins 24); Node 18 fails the engine
 check and is not supported by Next 16 or Prisma 7.
 
-> Status note: the Supabase project `gqghfeqxsovkuladydyv` is currently paused
-> or deleted — its hostname does not resolve and the pooler reports
-> `tenant/user postgres.gqghfeqxsovkuladydyv not found`. Only the project owner
-> can restore it from the dashboard. Everything above is verified against a
-> local PostgreSQL 17.5 instance in the meantime.
+> Status note: the original Supabase project `gqghfeqxsovkuladydyv` never came
+> back. On 23 November 2026 it was replaced by `chqajgxkwpmpoxsjsxks` (Tokyo,
+> PostgreSQL 17.12): all migrations applied, reference data seeded, the owner
+> account created with a forced password change and the private `bgd26-media`
+> bucket created with an anonymous read policy limited to `gallery/`.
+>
+> New Supabase projects expose the direct database host over IPv6 only, so the
+> app uses the transaction pooler on port 6543 and `DIRECT_URL` uses the
+> session pooler on port 5432. Migrations run through that session pooler.
 
 ## Next: after module 10
 

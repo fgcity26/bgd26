@@ -118,6 +118,33 @@ export type ValidatedImage = {
   originalFilename: string;
 };
 
+/** Normalise a declared MIME to an allow-listed gallery type, or null. */
+export function galleryMimeType(value: string): GalleryMimeType | null {
+  const normalized = normalizeDeclaredMime(value);
+  return (GALLERY_MIME_TYPES as readonly string[]).includes(normalized)
+    ? (normalized as GalleryMimeType)
+    : null;
+}
+
+/** Canonical extension for a validated gallery type. */
+export function galleryExtension(mimeType: GalleryMimeType): string {
+  return EXTENSION_BY_MIME[mimeType];
+}
+
+/**
+ * Keys this app is allowed to adopt back from storage.
+ *
+ * Direct uploads are issued for `gallery/YYYY/MM/<uuid>.<ext>`; anything else
+ * (another tenant's object, a production file, a traversal attempt) is refused
+ * even if the caller learned the key.
+ */
+const GALLERY_KEY_PATTERN =
+  /^gallery\/\d{4}\/\d{2}\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp|avif)$/;
+
+export function isGalleryStorageKey(key: string): boolean {
+  return GALLERY_KEY_PATTERN.test(key);
+}
+
 export function validateImageUpload(input: {
   bytes: Uint8Array;
   declaredMime: string;

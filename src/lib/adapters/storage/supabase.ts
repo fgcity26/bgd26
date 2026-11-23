@@ -5,10 +5,11 @@ import { StorageError, type StorageAdapter } from "./types";
 /**
  * Supabase Storage adapter.
  *
- * The bucket is created in the Supabase dashboard. Public gallery objects are
- * served from the CDN; private objects are only ever reached through a signed
- * URL issued by an authorised server action (module 3 only stores PUBLIC
- * gallery images).
+ * The bucket is private: gallery bytes are streamed through `/media/[...key]`
+ * (the `/object/public/` endpoint rejects private buckets), while production
+ * originals and customer files require a staff session for the same route.
+ * Direct uploads use short-lived signed URLs issued by a server action, so the
+ * service-role key never reaches the browser.
  */
 function storageClient(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -57,6 +58,22 @@ export const supabaseStorageAdapter: StorageAdapter = {
       }
       throw new StorageError("PROVIDER_ERROR", error.message);
     }
+  },
+
+  async createSignedUploadUrl({ key }) {
+    assertKey(key);
+    const { data, error } = await storageClient()
+      .storage.from(bucketName())
+      .createSignedUploadUrl(key);
+
+    if (error || !data) {
+      throw new StorageError(
+        "PROVIDER_ERROR",
+        error?.message ?? "Could not create a signed upload URL.",
+      );
+    }
+
+    return { uploadUrl: data.signedUrl, token: data.token, expiresInSeconds: null };
   },
 
   async inspect(key) {

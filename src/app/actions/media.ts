@@ -5,8 +5,14 @@ import { audit } from "@/lib/auth/audit";
 import { requestMeta } from "@/lib/auth/request-meta";
 import { requirePermission } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
-import { storeGalleryImage } from "@/lib/media/service";
+import {
+  completeGalleryUpload,
+  prepareGalleryUpload,
+  storeGalleryImage,
+  type StoredGalleryImage,
+} from "@/lib/media/service";
 import { MediaValidationError } from "@/lib/media/validate";
+import { StorageError } from "@/lib/adapters/storage";
 
 /**
  * Product gallery actions.
@@ -46,19 +52,8 @@ export async function uploadProductMediaAction(
   if (files.length === 0) return { error: "Choose at least one image." };
   if (files.length > 8) return { error: "Upload at most eight images at a time." };
 
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    select: { id: true, archivedAt: true },
-  });
-  if (!product || product.archivedAt) return { error: "That product cannot be edited." };
-
-  if (variantId) {
-    const variant = await prisma.productVariant.findFirst({
-      where: { id: variantId, productId },
-      select: { id: true },
-    });
-    if (!variant) return { error: "That variant does not belong to this product." };
-  }
+  const problem = await editableProduct(productId, variantId);
+  if (problem) return { error: problem };
 
   let added = 0;
   let reused = 0;
@@ -76,55 +71,21 @@ export async function uploadProductMediaAction(
         altText,
       });
 
-      // The same bytes may already be in this product's gallery. Reusing the
-      // asset is fine, but the product↔asset link is unique per role.
-      const linked = await prisma.productMedia.findFirst({
-        where: { productId, mediaAssetId: stored.assetId, role: "GALLERY" },
-        select: { id: true },
+      const outcome = await linkStoredImage({
+        actorUserId: session.user.id,
+        productId,
+        variantId,
+        stored,
+        makePrimary,
       });
-      if (linked) {
+
+      if (outcome === "already") {
         alreadyLinked += 1;
         continue;
       }
 
-      const existingCount = await prisma.productMedia.count({ where: { productId } });
-      const primary = makePrimary || existingCount === 0;
-
-      await prisma.$transaction(async (tx) => {
-        if (primary) {
-          await tx.productMedia.updateMany({
-            where: { productId },
-            data: { isPrimary: false },
-          });
-        }
-        await tx.productMedia.create({
-          data: {
-            productId,
-            variantId,
-            mediaAssetId: stored.assetId,
-            role: "GALLERY",
-            isPrimary: primary,
-            sortOrder: existingCount,
-          },
-        });
-      });
-
       if (stored.deduped) reused += 1;
       else added += 1;
-
-      await audit({
-        actorUserId: session.user.id,
-        action: "catalog.media.linked",
-        entityType: "product",
-        entityId: productId,
-        metadata: {
-          mediaAssetId: stored.assetId,
-          sha256: stored.sha256,
-          byteSize: stored.byteSize,
-          deduped: stored.deduped,
-        },
-        ...(await requestMeta()),
-      });
     } catch (error) {
       if (error instanceof MediaValidationError) {
         failures.push(`${file.name}: ${error.message}`);
@@ -151,6 +112,209 @@ export async function uploadProductMediaAction(
   if (failures.length > 0) parts.push(failures.join(" · "));
 
   return { success: `${parts.join("; ")}.` };
+}
+
+// -----------------------------------------------------------------------------
+// Direct uploads (browser → Supabase Storage)
+//
+// Used when the object store is remote and the deployment caps request bodies
+// below the 20 MB original limit. The signed URL is issued per file by the
+// server; the browser never sees the service-role key.
+// -----------------------------------------------------------------------------
+
+export type PreparedUpload = { key: string; uploadUrl: string };
+
+export async function prepareMediaUploadAction(input: {
+  productId: string;
+  variantId?: string | null;
+  declaredMime: string;
+  byteSize: number;
+}): Promise<PreparedUpload | { error: string }> {
+  await requirePermission("product.write");
+
+  const variantId = input.variantId || null;
+  const problem = await editableProduct(input.productId, variantId);
+  if (problem) return { error: problem };
+
+  try {
+    const prepared = await prepareGalleryUpload({
+      declaredMime: input.declaredMime,
+      byteSize: input.byteSize,
+    });
+    return { key: prepared.key, uploadUrl: prepared.uploadUrl };
+  } catch (error) {
+    if (error instanceof MediaValidationError || error instanceof StorageError) {
+      return { error: error.message };
+    }
+    console.error("[media] prepare upload failed", error);
+    return { error: "Could not start the upload." };
+  }
+}
+
+export type CompletedUpload = {
+  key: string;
+  declaredMime: string;
+  filename: string;
+};
+
+export async function completeMediaUploadAction(input: {
+  productId: string;
+  variantId?: string | null;
+  altText?: string;
+  isPrimary?: boolean;
+  uploads: CompletedUpload[];
+}): Promise<MediaFormState> {
+  const session = await requirePermission("product.write");
+  const productId = typeof input.productId === "string" ? input.productId : "";
+  const variantId = input.variantId || null;
+  const altText = (input.altText ?? "").trim() || null;
+  const makePrimary = input.isPrimary === true;
+  const uploads = Array.isArray(input.uploads) ? input.uploads : [];
+
+  if (!productId) return { error: "Missing product id." };
+  if (uploads.length === 0) return { error: "Choose at least one image." };
+  if (uploads.length > 8) return { error: "Upload at most eight images at a time." };
+
+  const problem = await editableProduct(productId, variantId);
+  if (problem) return { error: problem };
+
+  let added = 0;
+  let reused = 0;
+  let alreadyLinked = 0;
+  const failures: string[] = [];
+
+  for (const upload of uploads) {
+    try {
+      const stored = await completeGalleryUpload({
+        key: upload.key,
+        filename: upload.filename,
+        declaredMime: upload.declaredMime,
+        uploadedByUserId: session.user.id,
+        altText,
+      });
+
+      const outcome = await linkStoredImage({
+        actorUserId: session.user.id,
+        productId,
+        variantId,
+        stored,
+        makePrimary,
+      });
+
+      if (outcome === "already") {
+        alreadyLinked += 1;
+        continue;
+      }
+
+      if (stored.deduped) reused += 1;
+      else added += 1;
+    } catch (error) {
+      if (error instanceof MediaValidationError || error instanceof StorageError) {
+        failures.push(`${upload.filename}: ${error.message}`);
+      } else {
+        console.error("[media] direct upload failed", error);
+        failures.push(`${upload.filename}: could not be saved.`);
+      }
+    }
+  }
+
+  revalidatePath(`/products/${productId}`);
+  revalidatePath("/products");
+
+  if (added + reused === 0) {
+    if (alreadyLinked > 0) {
+      return { error: "That image is already in this product's gallery." };
+    }
+    return { error: failures[0] ?? "No images were saved." };
+  }
+
+  const parts = [`${added + reused} image${added + reused === 1 ? "" : "s"} saved`];
+  if (reused > 0) parts.push(`${reused} reused from an identical upload`);
+  if (alreadyLinked > 0) parts.push(`${alreadyLinked} already in the gallery`);
+  if (failures.length > 0) parts.push(failures.join(" · "));
+
+  return { success: `${parts.join("; ")}.` };
+}
+
+async function editableProduct(
+  productId: string,
+  variantId: string | null,
+): Promise<string | null> {
+  if (!productId) return "Missing product id.";
+
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { id: true, archivedAt: true },
+  });
+  if (!product || product.archivedAt) return "That product cannot be edited.";
+
+  if (variantId) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { id: variantId, productId },
+      select: { id: true },
+    });
+    if (!variant) return "That variant does not belong to this product.";
+  }
+
+  return null;
+}
+
+type LinkOutcome = "linked" | "already";
+
+async function linkStoredImage(input: {
+  actorUserId: string;
+  productId: string;
+  variantId: string | null;
+  stored: StoredGalleryImage;
+  makePrimary: boolean;
+}): Promise<LinkOutcome> {
+  const { actorUserId, productId, variantId, stored, makePrimary } = input;
+
+  // The same bytes may already be in this product's gallery. Reusing the
+  // asset is fine, but the product↔asset link is unique per role.
+  const linked = await prisma.productMedia.findFirst({
+    where: { productId, mediaAssetId: stored.assetId, role: "GALLERY" },
+    select: { id: true },
+  });
+  if (linked) return "already";
+
+  const existingCount = await prisma.productMedia.count({ where: { productId } });
+  const primary = makePrimary || existingCount === 0;
+
+  await prisma.$transaction(async (tx) => {
+    if (primary) {
+      await tx.productMedia.updateMany({
+        where: { productId },
+        data: { isPrimary: false },
+      });
+    }
+    await tx.productMedia.create({
+      data: {
+        productId,
+        variantId,
+        mediaAssetId: stored.assetId,
+        role: "GALLERY",
+        isPrimary: primary,
+        sortOrder: existingCount,
+      },
+    });
+  });
+
+  await audit({
+    actorUserId,
+    action: "catalog.media.linked",
+    entityType: "product",
+    entityId: productId,
+    metadata: {
+      mediaAssetId: stored.assetId,
+      sha256: stored.sha256,
+      byteSize: stored.byteSize,
+      deduped: stored.deduped,
+    },
+    ...(await requestMeta()),
+  });
+
+  return "linked";
 }
 
 export async function removeProductMediaAction(formData: FormData): Promise<void> {

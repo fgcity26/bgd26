@@ -6,10 +6,11 @@ import { prisma } from "@/lib/db";
 /**
  * Serve original gallery bytes.
  *
- * Local storage is streamed from `.data/media`; Supabase Storage redirects to
- * the bucket's CDN URL. Public gallery images are cacheable for a year because
- * keys are random and immutable. Private assets require a staff session with
- * catalogue access.
+ * Local storage is streamed from `.data/media`. Supabase Storage is a PRIVATE
+ * bucket (only the `gallery/` prefix has an anonymous read policy), so its
+ * `/object/public/` URL returns 400 — the bytes are streamed through this route
+ * instead, exactly as stored, with a one-year immutable cache because keys are
+ * random and never reused.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,18 +64,6 @@ export async function GET(
       : "private, no-store";
 
   const adapter = getStorageAdapter();
-  const remote = asset.visibility === "PUBLIC" ? adapter.publicUrl(asset.storageKey) : null;
-
-  if (remote) {
-    return new Response(null, {
-      status: 307,
-      headers: {
-        Location: remote,
-        "Cache-Control": cacheControl,
-        ETag: etag,
-      },
-    });
-  }
 
   let stream: ReadableStream<Uint8Array>;
   try {

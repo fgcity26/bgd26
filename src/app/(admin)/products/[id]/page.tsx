@@ -17,6 +17,8 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requirePagePermission } from "@/lib/auth/session";
 import { canViewCostPrices, toProductView } from "@/lib/catalog/dto";
 import { prisma } from "@/lib/db";
+import { storageProvider } from "@/lib/adapters/storage";
+import { maxUploadBytes } from "@/lib/media/validate";
 
 export const metadata: Metadata = {
   title: "Product",
@@ -243,7 +245,12 @@ export default async function ProductDetailPage({
 
         {canWrite && !archived ? (
           <div className="mt-4 border-t border-slate-200 pt-4">
-            <MediaUploadForm productId={view.id} variants={view.variants} />
+            <MediaUploadForm
+              productId={view.id}
+              variants={view.variants}
+              directUpload={storageProvider() === "supabase"}
+              maxBytes={maxUploadBytes()}
+            />
           </div>
         ) : null}
       </section>

@@ -21,6 +21,7 @@ export function getStorageAdapter(): StorageAdapter {
 
 export {
   StorageError,
+  type SignedUpload,
   type StorageAdapter,
   type StorageObjectInfo,
   type StorageProvider,

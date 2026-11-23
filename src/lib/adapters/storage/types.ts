@@ -14,6 +14,15 @@ export type StorageObjectInfo = {
   sha256: string;
 };
 
+export type SignedUpload = {
+  /** Full URL the browser PUTs the bytes to. No secret is embedded. */
+  uploadUrl: string;
+  /** Opaque provider token, kept for audit/debugging. */
+  token: string;
+  /** Seconds until the URL expires, when the provider reports it. */
+  expiresInSeconds: number | null;
+};
+
 export class StorageError extends Error {
   constructor(
     readonly code:
@@ -37,6 +46,15 @@ export interface StorageAdapter {
    * an existing object: keys are random and never reused.
    */
   put(input: { key: string; bytes: Uint8Array; contentType: string }): Promise<void>;
+
+  /**
+   * Issue a short-lived URL the browser can PUT one object to, so large
+   * originals never pass through a serverless function body limit.
+   *
+   * Optional: the local filesystem adapter has no equivalent and callers must
+   * fall back to a normal multipart upload.
+   */
+  createSignedUploadUrl?(input: { key: string }): Promise<SignedUpload>;
 
   /** Re-read the stored object and return its true size and SHA-256. */
   inspect(key: string): Promise<StorageObjectInfo>;

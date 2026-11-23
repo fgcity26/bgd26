@@ -111,6 +111,12 @@ rejected. After writing, the server re-reads the object and compares its SHA-256
 and size — a mismatch fails the upload. Nothing is resized, cropped,
 recompressed or stripped.
 
+On Supabase the browser uploads each original straight to a short-lived signed
+URL, then the server adopts the object, re-validates the magic bytes and records
+the SHA-256 before linking it. This keeps 20 MB originals working on serverless
+platforms, whose request bodies are capped at 4.5 MB. The local provider keeps
+the multipart form because there is no signed-URL equivalent on disk.
+
 Storage is an adapter (`src/lib/adapters/storage/`):
 
 | Provider | Use | Where bytes go |
@@ -543,6 +549,11 @@ sending. Transactional email connects with the Resend adapter in a later module;
 until then the console shows the confirmation link so the flow can be tested.
 
 ## Scripts
+
+Deployment to Vercel — environment variables, migrations, domain and the
+serverless upload path — is documented in
+[`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md). `vercel.json` pins functions
+to `hnd1` (Tokyo) beside the Supabase project.
 
 | Script | What it does |
 | --- | --- |

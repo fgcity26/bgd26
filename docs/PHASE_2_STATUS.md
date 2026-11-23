@@ -1477,6 +1477,11 @@ check and is not supported by Next 16 or Prisma 7.
 > New Supabase projects expose the direct database host over IPv6 only, so the
 > app uses the transaction pooler on port 6543 and `DIRECT_URL` uses the
 > session pooler on port 5432. Migrations run through that session pooler.
+>
+> Vercel deployment is prepared and documented in `docs/DEPLOY_VERCEL.md`:
+> functions run in Tokyo (`hnd1`), Node is pinned to 24, and gallery originals
+> upload straight to Storage through short-lived signed URLs so the 4.5 MB
+> serverless request cap never applies.
 
 ## Next: after module 10
 

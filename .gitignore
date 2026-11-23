@@ -74,3 +74,6 @@ playwright/.cache/
 # ---- Python helper scripts cache ----
 __pycache__/
 *.pyc
+
+# ---- Vercel CLI link state ----
+.vercel

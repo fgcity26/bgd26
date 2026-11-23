@@ -8,6 +8,31 @@ Prepared 23 November 2026. Target: **Vercel Hobby first**, functions in
 > move to Pro before taking real orders. Nothing here is Hobby-only except the
 > single-region default, and `vercel.json` already pins that region.
 
+## Live deployment (23 November 2026)
+
+| | |
+| --- | --- |
+| Project | `bgd26` — `prj_raQCofcuH8Mdkq91K7Vp6IyHoGgW`, account `fgcity-26` |
+| Deployment | `dpl_EaMXyi2ds9GmRCyjohJcBwzYqhvi` (TLS-verified database) |
+| Production URL | <https://bgd26.com> (alias ready) and <https://bgd26.vercel.app> |
+| Region / Node | `hnd1` / `24.x` |
+| Health | `{"status":"ok","database":"up"}`, warm database latency 5–6 ms |
+| Environment | 16 variables, Production only; previews intentionally have none |
+| Domain | `bgd26.com` and `www.bgd26.com` added, waiting for DNS |
+
+DNS records to create at Intelwebhost (the domain currently uses
+`ns1.intelwebhost.com` / `ns2.intelwebhost.com`, and its apex A record points at
+`127.0.0.1`):
+
+| Type | Name | Value |
+| --- | --- | --- |
+| `A` | `@` | `76.76.21.21` |
+| `CNAME` | `www` | `cname.vercel-dns.com` |
+
+Replace the existing `127.0.0.1` apex record; do not change nameservers unless
+you also want Vercel to host DNS (that would move any mail records). Vercel
+issues the TLS certificate once the records resolve.
+
 ## 1. What the repository already does for Vercel
 
 | Concern | Handling |
@@ -18,6 +43,7 @@ Prepared 23 November 2026. Target: **Vercel Hobby first**, functions in
 | Large originals | Gallery uploads go **browser → Supabase Storage** through a signed URL, so the 4.5 MB function-body limit never applies |
 | Object storage | `STORAGE_PROVIDER=supabase`; the local filesystem adapter is development-only |
 | Database | Transaction pooler at runtime (`:6543`); migrations use the session pooler (`:5432`) |
+| TLS | `DATABASE_SSL_CA` pins Supabase's own CA, so chain and hostname are verified (`prisma/certs/supabase-prod-ca-2021.crt`) |
 | Secrets | Only in `.env.local` / the Vercel dashboard; `.gitignore` blocks `.env*` |
 
 ## 2. Environment variables
@@ -29,6 +55,7 @@ for previews.
 | Variable | Value |
 | --- | --- |
 | `DATABASE_URL` | `postgresql://postgres.chqajgxkwpmpoxsjsxks:<db-password>@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres?sslmode=require` |
+| `DATABASE_SSL_CA` | PEM of `prisma/certs/supabase-prod-ca-2021.crt`. Supabase's pooler is signed by Supabase's own CA, so `sslmode=require` fails with `SELF_SIGNED_CERT_IN_CHAIN` unless this is set. With it, node-postgres verifies chain **and** hostname. |
 | `NEXT_PUBLIC_APP_URL` | `https://bgd26.com` |
 | `AUTH_PROVIDER` | `local` |
 | `AUTH_SECRET` | 32+ random bytes (generate a fresh one for production) |
@@ -59,8 +86,14 @@ Vercel builds must not migrate: parallel builds would race, and the direct host
 is IPv6-only. Apply migrations from a machine that has `.env.local`:
 
 ```bash
-npx prisma migrate deploy   # uses DIRECT_URL (session pooler, port 5432)
+NODE_EXTRA_CA_CERTS=prisma/certs/supabase-prod-ca-2021.crt \
+  npx prisma migrate deploy   # uses DIRECT_URL (session pooler, port 5432)
 ```
+
+`NODE_EXTRA_CA_CERTS` makes the Prisma CLI verify Supabase's private CA. Keep
+`DIRECT_URL` at `sslmode=require`; if your shell has no CA file to hand, the
+CLI also accepts the local `sslmode=no-verify` convention used in
+`.env.local` — but never ship that URL to Vercel.
 
 Order for each release: **migrate first, deploy second**. Migrations must stay
 backward compatible with the running version (add columns/tables; drop in a
@@ -143,5 +176,5 @@ only — never reverse a migration in production; ship a corrective migration.
 | `413 FUNCTION_PAYLOAD_TOO_LARGE` | A request body above 4.5 MB. Gallery uploads are fixed; check any new upload/import endpoint |
 | `too many connections` | Raise `DATABASE_POOL_MAX` only slightly, or lower it; the Supavisor pool has a plan limit |
 | Pages slow (~200 ms per query) | Functions not in `hnd1`, or a preview region override |
-| `SELF_SIGNED_CERT_IN_CHAIN` | `sslmode=no-verify` leaked into production; use `sslmode=require` |
+| `SELF_SIGNED_CERT_IN_CHAIN` | `DATABASE_SSL_CA` missing. Supabase's pooler uses its own CA; set the PEM (the repo bundles it) — do not fall back to `sslmode=no-verify` in production |
 | Login loop after deploy | `AUTH_SECRET` changed between deployments, or cookies blocked on the apex domain |

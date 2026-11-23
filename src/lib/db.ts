@@ -14,6 +14,34 @@ const globalForPrisma = globalThis as unknown as {
   bgd26Prisma?: PrismaClient;
 };
 
+/**
+ * Supabase's pooler presents a certificate chain signed by its own CA, which is
+ * not in the public trust store. Without this, every TLS connection fails with
+ * `SELF_SIGNED_CERT_IN_CHAIN` (including Vercel builds that prerender data).
+ *
+ * Set `DATABASE_SSL_CA` to the PEM from Supabase → Database → SSL
+ * configuration (or `prisma/certs/supabase-prod-ca-2021.crt`) to get full
+ * `verify-full` semantics: chain and hostname are both checked.
+ */
+export function databaseSsl(): { ca: string; rejectUnauthorized: true } | undefined {
+  const raw = process.env.DATABASE_SSL_CA?.trim();
+  if (!raw) return undefined;
+  return { ca: raw.replace(/\\n/g, "\n"), rejectUnauthorized: true };
+}
+
+const SSL_PARAMS = ["sslmode", "uselibpqcompat", "sslrootcert", "sslcert", "sslkey"];
+
+/**
+ * Drop SSL query parameters when an explicit `ssl` object is supplied:
+ * node-postgres treats `sslmode=require` as `verify-full`, and mixing the two
+ * would let the URL override the CA we just configured.
+ */
+export function withoutSslParams(connectionString: string): string {
+  const url = new URL(connectionString);
+  for (const key of SSL_PARAMS) url.searchParams.delete(key);
+  return url.toString();
+}
+
 export function getPrisma(): PrismaClient {
   if (globalForPrisma.bgd26Prisma) return globalForPrisma.bgd26Prisma;
 
@@ -24,10 +52,12 @@ export function getPrisma(): PrismaClient {
     );
   }
 
+  const ssl = databaseSsl();
   const adapter = new PrismaPg({
-    connectionString,
+    connectionString: ssl ? withoutSslParams(connectionString) : connectionString,
     // The pooler already multiplexes connections; keep the app pool small.
     max: Number(process.env.DATABASE_POOL_MAX ?? 5),
+    ...(ssl ? { ssl } : {}),
   });
 
   const client = new PrismaClient({

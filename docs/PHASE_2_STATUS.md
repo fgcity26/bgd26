@@ -1478,10 +1478,12 @@ check and is not supported by Next 16 or Prisma 7.
 > app uses the transaction pooler on port 6543 and `DIRECT_URL` uses the
 > session pooler on port 5432. Migrations run through that session pooler.
 >
-> Vercel deployment is prepared and documented in `docs/DEPLOY_VERCEL.md`:
-> functions run in Tokyo (`hnd1`), Node is pinned to 24, and gallery originals
-> upload straight to Storage through short-lived signed URLs so the 4.5 MB
-> serverless request cap never applies.
+> Vercel deployment is live at <https://bgd26.vercel.app> (deployment
+> `dpl_EaMXyi2ds9GmRCyjohJcBwzYqhvi`): functions in Tokyo (`hnd1`), Node 24,
+> `DATABASE_SSL_CA` pinning Supabase's CA for verify-full TLS. Gallery originals
+> upload straight to Storage through short-lived signed URLs, so the 4.5 MB
+> serverless request cap never applies. `bgd26.com` is added to the project and
+> waits only on its DNS records; see `docs/DEPLOY_VERCEL.md`.
 
 ## Next: after module 10
 

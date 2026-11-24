@@ -133,6 +133,27 @@ The local storage path is runtime data, not build input, so every filesystem cal
 is marked `/* turbopackIgnore: true */` — otherwise Turbopack traces the whole
 project into the build.
 
+### Sample catalogue
+
+A new shop needs something to look at. `npm run sample:catalog` seeds twelve
+published products — engraved wood and acrylic gifts, wall clocks (including a
+personalised photo clock), three gadgets and two gift bundles — with Bangla
+names, VAT-inclusive prices, one default variant each and opening stock posted
+to the ledger. It is idempotent: run it again and it updates the same rows.
+
+```bash
+npm run sample:catalog            # images → Supabase Storage, stock posted
+npm run sample:catalog:local      # same, but bytes stay on disk
+npm run sample:catalog:archive    # archive all of it; stock and media are kept
+```
+
+The product photos currently shipped are **locally rendered placeholders**
+(`scripts/sample-images.py`, tagged `SAMPLE PHOTO`, 1000 × 1000 JPEG). They carry
+no third-party rights and exist so the storefront is presentable before the
+owner's own photography arrives. Replace them one by one on each product page:
+uploading a new image makes it primary, and the placeholder can then be removed
+from the gallery (the asset row itself is kept, by rule).
+
 ## Inventory and stock ledger
 
 Stock lives under **Inventory**, one balance row per variant and warehouse.
@@ -591,6 +612,10 @@ to `hnd1` (Tokyo) beside the Supabase project.
 | `npm run verify:shipping` | HTTP shipment booking, tracking, cancellation, courier registry and COD remittance checks against a running `npm start` |
 | `npm run verify:reports` | HTTP profit and loss, balance sheet and cash-flow checks, including a reversal, against a running `npm start` |
 | `npm run verify:invariants` | 10 database rule checks (totals, journals, immutability) |
+| `npm run sample:catalog` | Seed the twelve-product sample catalogue with images and opening stock |
+| `npm run sample:catalog:local` | Same, but keep image bytes in the local storage adapter |
+| `npm run sample:catalog:archive` | Archive the sample products (stock and media are retained) |
+| `npm run sample:images` | Re-render the placeholder product photos into `prisma/sample-images` |
 | `npm run env:check` | Validate `.env.local` without printing secrets |
 | `npm run schema:check` | Offline structural validator (90 tables / 81 enums) |
 

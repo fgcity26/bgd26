@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -18,6 +19,11 @@ export default function AuthLayout({ children }: Readonly<{ children: React.Reac
       </div>
       {children}
       <p className="mt-8 text-center text-xs text-ink-500">
+        <Link href="/" className="underline-offset-2 hover:text-brand-700 hover:underline">
+          ← Back to the shop · দোকানে ফিরুন
+        </Link>
+      </p>
+      <p className="mt-3 text-center text-xs text-ink-500">
         Bangladesh business OS · বাংলাদেশের ব্যবসার সিস্টেম
       </p>
     </main>

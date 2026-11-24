@@ -57,7 +57,7 @@ export default function StorefrontLayout({ children }: Readonly<{ children: Reac
               Cash on delivery across Bangladesh. bKash and Nagad are verified before dispatch.
             </p>
           </div>
-          <div className="flex flex-wrap gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-4 text-xs">
             <Link href="/shop" className="hover:text-brand-700">
               Shop
             </Link>
@@ -66,6 +66,17 @@ export default function StorefrontLayout({ children }: Readonly<{ children: Reac
             </Link>
             <Link href="/account" className="hover:text-brand-700">
               Account
+            </Link>
+            {/*
+             * Staff console entry point. The storefront is a separate shell from
+             * the admin app, so without this link there is no way to reach
+             * `/login` from the public site.
+             */}
+            <Link
+              href="/login"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-ink-700 transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700"
+            >
+              Staff sign in · স্টাফ লগইন
             </Link>
           </div>
         </div>

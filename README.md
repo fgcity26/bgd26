@@ -450,6 +450,30 @@ order under `/account/orders/[id]` without the link, because ownership is checke
 by `customerId`. Cancelling restores stock, releases the coupon and marks a
 pending payment `FAILED`.
 
+### Front page
+
+The shop leads with products: categories, featured items and new arrivals come
+first, and the banner sits at the foot of the page so a phone shows the catalogue
+without scrolling past marketing copy. Its words are editable, its layout is not.
+
+**Console → Front page** (`/storefront`, permission `content.read` to view,
+`content.write` to save) edits one row in `storefront_home`: the kicker, heading,
+paragraph, two buttons (label + link) and up to four trust chips. Clearing a
+label hides that button. Links must be same-site paths starting with `/` —
+`javascript:`, `//host` and `https://` are rejected on save *and* again when the
+hero renders, so an old or hand-inserted row cannot become an open redirect.
+
+Saving revalidates `/` immediately; the page also revalidates on a 120-second
+ISR window. Nothing else is stored: categories, featured products and new
+arrivals stay derived from the catalogue, so archiving a product removes it from
+the front page without anyone editing copy. With no saved row the storefront
+renders the shipped defaults, so a fresh deployment is complete on day one.
+
+Signing out is deliberately explicit: staff land on `/login?signedOut=1` and
+shoppers on `/account/login?signedOut=1`, each with a short confirmation. The
+flag also stops the sign-in page from bouncing a stale cookie back to the
+console, which used to look like the sign-out had failed.
+
 ## Customer accounts
 
 The account area lives at `/account` with `/account/login`, `/account/register`,

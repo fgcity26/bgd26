@@ -108,6 +108,12 @@ const NAV: Array<NavItem & { anyOf?: string[] }> = [
     anyOf: ["content.read"],
   },
   {
+    href: "/storefront",
+    label: "Front page",
+    labelBn: "প্রথম পাতা",
+    anyOf: ["content.read"],
+  },
+  {
     href: "/newsletter",
     label: "Newsletter",
     labelBn: "নিউজলেটার",

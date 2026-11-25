@@ -734,6 +734,7 @@ model User {
   aiActions             AiActionLog[]                 @relation("AiActionActor")
   reviewsModerated      ProductReview[]               @relation("ReviewModerator")
   sitePagesAuthored     SitePage[]                    @relation("SitePageAuthor")
+  storefrontHomeEdits   StorefrontHome[]              @relation("StorefrontHomeEditor")
 
   @@index([status])
   @@index([deletedAt])
@@ -3200,3 +3201,31 @@ model SitePage {
   @@map("site_pages")
 }
 
+/// Editable copy for the public home page.
+///
+/// The storefront is code, not a page builder: headings, buttons and the four
+/// trust points are the only things a shop owner changes often, so they live in
+/// one row (`id = "home"`). Everything else — categories, featured products,
+/// new arrivals — stays derived from the catalogue and cannot drift out of sync.
+///
+/// A missing row is normal: the storefront falls back to the shipped defaults,
+/// so a fresh deployment looks complete before anyone opens the editor.
+model StorefrontHome {
+  id              String   @id @default("home")
+  kicker          String   @default("বাংলাদেশে ডেলিভারি")
+  heading         String
+  subheading      String
+  primaryLabel    String   @default("Start shopping")
+  primaryHref     String   @default("/shop")
+  secondaryLabel  String   @default("Track an order")
+  secondaryHref   String   @default("/track")
+  // Shown as small chips beside the copy. Four fits both phone and desktop.
+  bullets         String[] @default([])
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  updatedBy User? @relation("StorefrontHomeEditor", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("storefront_home")
+}

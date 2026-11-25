@@ -6,6 +6,7 @@ import { z } from "zod";
 import { AuthError, getAuthAdapter } from "@/lib/adapters/auth";
 import { audit } from "@/lib/auth/audit";
 import { clearSessionCookie } from "@/lib/auth/cookies";
+import { STAFF_SIGNED_OUT_PATH } from "@/lib/auth/sign-out";
 import { passwordProblem, pinProblem } from "@/lib/auth/policy";
 import { requestMeta } from "@/lib/auth/request-meta";
 import { getStaffSession, requireStaff } from "@/lib/auth/session";
@@ -157,5 +158,9 @@ export async function logoutAction(): Promise<void> {
   }
 
   await clearSessionCookie();
-  redirect("/login");
+  // Always land on the sign-in screen, never on the shop: a staff member who
+  // just signed out needs the way back in, plus a clear confirmation that the
+  // session really ended. The flag also stops `/login` from bouncing to
+  // `/dashboard` if a stale cookie somehow survives the clear.
+  redirect(STAFF_SIGNED_OUT_PATH);
 }

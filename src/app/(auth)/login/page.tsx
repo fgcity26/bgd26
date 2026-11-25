@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getStaffSession } from "@/lib/auth/session";
+import { isSignedOutNotice } from "@/lib/auth/sign-out";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = {
@@ -11,14 +12,18 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; signedOut?: string }>;
 }) {
+  const { next, signedOut } = await searchParams;
+  const justSignedOut = isSignedOutNotice(signedOut);
+
   const session = await getStaffSession();
-  if (session) {
+  // After a sign-out the form is always shown. Otherwise a surviving cookie
+  // would bounce the visitor to `/dashboard`, which looks like the sign-out
+  // failed.
+  if (session && !justSignedOut) {
     redirect(session.user.mustChangePassword ? "/account/password" : "/dashboard");
   }
-
-  const { next } = await searchParams;
 
   return (
     <section className="w-full">
@@ -26,6 +31,15 @@ export default async function LoginPage({
       <p className="mt-1 text-sm text-ink-500">
         ক্যাশিয়ার, ম্যানেজার বা মালিক—আপনার অ্যাকাউন্টে প্রবেশ করুন।
       </p>
+
+      {justSignedOut ? (
+        <p
+          role="status"
+          className="mt-4 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-800"
+        >
+          You have signed out. · আপনি প্রস্থান করেছেন।
+        </p>
+      ) : null}
 
       <LoginForm next={next} />
 

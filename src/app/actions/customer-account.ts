@@ -18,6 +18,7 @@ import {
   type AddressInput,
 } from "@/lib/customer-auth/addresses";
 import { clearCustomerCookie, writeCustomerCookie } from "@/lib/customer-auth/cookies";
+import { CUSTOMER_SIGNED_OUT_PATH } from "@/lib/auth/sign-out";
 import { getCustomerSession, safeCustomerNext } from "@/lib/customer-auth/session";
 import type { CustomerActionState } from "@/lib/customer-auth/action-state";
 
@@ -94,7 +95,10 @@ export async function signInCustomerAction(
 export async function signOutCustomerAction(): Promise<void> {
   await clearCustomerCookie();
   revalidatePath("/");
-  redirect("/");
+  revalidatePath("/account");
+  // Shoppers should see the sign-in screen, not the storefront: the shop home
+  // gives no sign that the sign-out worked.
+  redirect(CUSTOMER_SIGNED_OUT_PATH);
 }
 
 export async function updateProfileAction(formData: FormData): Promise<void> {

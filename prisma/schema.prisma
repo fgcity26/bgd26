@@ -735,6 +735,7 @@ model User {
   reviewsModerated      ProductReview[]               @relation("ReviewModerator")
   sitePagesAuthored     SitePage[]                    @relation("SitePageAuthor")
   storefrontHomeEdits   StorefrontHome[]              @relation("StorefrontHomeEditor")
+  storefrontBannerEdits StorefrontBanner[]            @relation("StorefrontBannerEditor")
 
   @@index([status])
   @@index([deletedAt])
@@ -1179,6 +1180,9 @@ model MediaAsset {
   expenses     Expense[]
   reviewMedia  ReviewMedia[]
   sitePageOgImages SitePage[] @relation("SitePageOgImage")
+  storefrontLogos  StorefrontHome[] @relation("StorefrontLogo")
+  storefrontHeroImages StorefrontHome[] @relation("StorefrontHeroImage")
+  storefrontBannerImages StorefrontBanner[] @relation("StorefrontBannerImage")
 
   @@index([sha256Checksum])
   @@index([mediaType, visibility])
@@ -3221,11 +3225,46 @@ model StorefrontHome {
   secondaryHref   String   @default("/track")
   // Shown as small chips beside the copy. Four fits both phone and desktop.
   bullets         String[] @default([])
+  // Brand mark: an uploaded image replaces the "b" badge in the shop header.
+  // `logoText` is the wordmark beside it, so a shop can rename itself without
+  // touching code; clearing the image falls back to the letter badge.
+  logoAssetId     String?
+  logoText        String   @default("bgd26")
+  // Optional photo behind the first carousel slide. The copy above stays the
+  // headline; without a photo the slide uses the brand gradient.
+  heroImageAssetId String?
   updatedByUserId String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  updatedBy User? @relation("StorefrontHomeEditor", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  updatedBy User?        @relation("StorefrontHomeEditor", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  logoAsset MediaAsset?  @relation("StorefrontLogo", fields: [logoAssetId], references: [id], onDelete: SetNull)
+  heroImage MediaAsset?  @relation("StorefrontHeroImage", fields: [heroImageAssetId], references: [id], onDelete: SetNull)
 
   @@map("storefront_home")
+}
+
+/// Slides 2–6 of the front-page carousel.
+///
+/// Slide 1 is the hero copy in `storefront_home`, so a shop always has a banner
+/// even before it uploads a photo. Slots are fixed (`2..6`) and unique, which is
+/// what caps the carousel at six banners without a counter that can drift. A
+/// cleared slot keeps its row with `isActive = false` — nothing is hard-deleted.
+model StorefrontBanner {
+  id              String   @id @default(cuid())
+  slot            Int      @unique
+  title           String   @default("")
+  subtitle        String   @default("")
+  imageAssetId    String?
+  linkLabel       String   @default("")
+  linkHref        String   @default("")
+  isActive        Boolean  @default(false)
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  image     MediaAsset? @relation("StorefrontBannerImage", fields: [imageAssetId], references: [id], onDelete: SetNull)
+  updatedBy User?       @relation("StorefrontBannerEditor", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("storefront_banners")
 }

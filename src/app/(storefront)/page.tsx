@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { HomeHero } from "@/components/storefront/home-hero";
+import { HomeBanners } from "@/components/storefront/home-banners";
 import { ProductCard } from "@/components/storefront/product-card";
 import { getStorefrontHome } from "@/lib/storefront/catalog";
+import { buildCarouselSlides, getActiveBanners } from "@/lib/storefront/banners";
 import { getHomeContent } from "@/lib/storefront/home-content";
 
 export const revalidate = 120;
@@ -15,11 +16,13 @@ export const metadata: Metadata = {
 };
 
 export default async function StorefrontHome() {
-  const [{ categories, featured, latest }, content] = await Promise.all([
+  const [{ categories, featured, latest }, content, banners] = await Promise.all([
     getStorefrontHome(),
     getHomeContent(),
+    getActiveBanners(),
   ]);
   const highlighted = featured.length > 0 ? featured : latest;
+  const slides = buildCarouselSlides(content, banners, content.heroImage);
 
   return (
     <div className="space-y-10">
@@ -88,8 +91,9 @@ export default async function StorefrontHome() {
       ) : null}
 
       {/* Products first, story last: on a phone the catalogue is one thumb away.
-          The banner copy is editable at /storefront. */}
-      <HomeHero content={content} />
+          Up to six banner slides rotate here; the copy of slide one and the
+          extra banners are edited at /storefront. */}
+      <HomeBanners slides={slides} bullets={content.bullets} />
     </div>
   );
 }

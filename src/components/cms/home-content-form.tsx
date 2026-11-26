@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { saveHomeContentAction, type HomeContentState } from "@/app/actions/storefront-home";
-import type { HomeContent } from "@/lib/storefront/home-content";
+import { StorefrontImageField } from "@/components/cms/storefront-image-field";
+import type { HomeEditorContent } from "@/lib/storefront/home-content";
 
 const inputClass =
   "mt-1 block w-full min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-ink-900 shadow-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100";
@@ -20,7 +21,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
       disabled={disabled || pending}
       className="min-h-11 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {pending ? "Saving…" : "Save front page"}
+      {pending ? "Saving…" : "Save hero banner"}
     </button>
   );
 }
@@ -29,9 +30,11 @@ const BULLET_SLOTS = 4;
 
 export function HomeContentForm({
   content,
+  directUpload,
   canWrite,
 }: {
-  content: HomeContent;
+  content: HomeEditorContent;
+  directUpload: boolean;
   canWrite: boolean;
 }) {
   const [state, formAction] = useActionState<HomeContentState, FormData>(
@@ -58,11 +61,24 @@ export function HomeContentForm({
       ) : null}
 
       <fieldset className="space-y-4" disabled={!canWrite}>
-        <legend className="text-sm font-semibold text-ink-900">Banner · ব্যানার</legend>
+        <legend className="text-sm font-semibold text-ink-900">
+          Slide 1 · hero banner · প্রথম ব্যানার
+        </legend>
+
+        <StorefrontImageField
+          name="heroImageAssetId"
+          label="Hero background photo (optional)"
+          hint="Shown behind this slide. Without a photo the slide uses the brand gradient."
+          initialAssetId={content.heroImageAssetId}
+          initialUrl={content.heroImage?.url ?? null}
+          directUpload={directUpload}
+          aspect="aspect-[16/5]"
+          alt={content.heading}
+        />
 
         <div>
           <label htmlFor="kicker" className={labelClass}>
-            Small line above the heading · উপরের ছোট লাইন
+            Small line above the title · উপরের ছোট লাইন
           </label>
           <input
             id="kicker"
@@ -77,7 +93,7 @@ export function HomeContentForm({
 
         <div>
           <label htmlFor="heading" className={labelClass}>
-            Heading · শিরোনাম
+            Hero title · হিরো শিরোনাম
           </label>
           <input
             id="heading"
@@ -87,6 +103,7 @@ export function HomeContentForm({
             defaultValue={content.heading}
             className={inputClass}
           />
+          <p className={hintClass}>The largest line in the first banner. Keep it under 80 characters.</p>
         </div>
 
         <div>
@@ -176,11 +193,11 @@ export function HomeContentForm({
 
       <fieldset className="space-y-3" disabled={!canWrite}>
         <legend className="text-sm font-semibold text-ink-900">
-          Trust points · সুবিধা
+          Trust points under the carousel · সুবিধা
         </legend>
         <p className={hintClass}>
-          Up to four short chips: delivery, payment, coverage, updates. Empty slots are
-          ignored.
+          Up to four short chips shown below the banners: delivery, payment, coverage,
+          updates. Empty slots are ignored.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {bullets.map((value, index) => (

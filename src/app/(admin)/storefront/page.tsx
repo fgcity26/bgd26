@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { storageProvider } from "@/lib/adapters/storage";
+import { BannerSlotsForm } from "@/components/cms/banner-slots-form";
+import { BrandForm } from "@/components/cms/brand-form";
 import { HomeContentForm } from "@/components/cms/home-content-form";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePagePermission } from "@/lib/auth/session";
+import { getBannerSlots } from "@/lib/storefront/banners";
 import { getHomeContent } from "@/lib/storefront/home-content";
 
 export const metadata: Metadata = {
@@ -16,14 +20,19 @@ export const dynamic = "force-dynamic";
 /**
  * The front-page editor.
  *
- * Deliberately narrow: the banner copy, its two buttons and the trust chips.
- * Everything else on the home page is derived from the catalogue, so this screen
- * cannot hide a product or invent a category.
+ * Three narrow forms instead of a page builder: the shop logo, the first
+ * carousel slide, and the five banners that follow it. Everything else on the
+ * home page is derived from the catalogue, so this screen cannot hide a product
+ * or invent a category.
  */
 export default async function FrontPageEditor() {
   const session = await requirePagePermission("content.read");
   const canWrite = hasPermission(session, "content.write");
-  const content = await getHomeContent();
+  const [content, banners] = await Promise.all([getHomeContent(), getBannerSlots()]);
+
+  // Production uploads straight to Supabase Storage; local development posts to
+  // a server action instead, so the editor works without cloud credentials.
+  const directUpload = storageProvider() === "supabase";
 
   return (
     <div className="space-y-5">
@@ -31,8 +40,9 @@ export default async function FrontPageEditor() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Front page</h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-500">
-            প্রথম পাতার ব্যানার, দুটি বাটন ও সুবিধার কথাগুলো এখান থেকে বদলান। পণ্য,
-            ক্যাটাগরি ও নতুন পণ্যের তালিকা নিজে থেকেই বসে।
+            লোগো, প্রথম ব্যানার ও বাকি পাঁচটি ব্যানার এখান থেকে বদলান। ছয়টি ব্যানার ১০
+            সেকেন্ড পর পর ঘুরবে, প্রতিটির উচ্চতা পূর্ণ পর্দার এক-পঞ্চমাংশ। পণ্য, ক্যাটাগরি
+            ও নতুন পণ্যের তালিকা নিজে থেকেই বসে।
           </p>
         </div>
         <Link
@@ -46,7 +56,45 @@ export default async function FrontPageEditor() {
       </header>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
-        <HomeContentForm content={content} canWrite={canWrite} />
+        <h2 className="text-lg font-semibold tracking-tight">Logo and shop name</h2>
+        <p className="mt-1 text-sm text-ink-500">
+          শপের হেডারে সব পেজে দেখানো হবে। ছবি না দিলে সবুজ অক্ষরের ব্যাজ ব্যবহৃত হবে।
+        </p>
+        <div className="mt-4">
+          <BrandForm
+            logoAssetId={content.logoAssetId}
+            logoUrl={content.logo?.url ?? null}
+            logoText={content.logoText}
+            directUpload={directUpload}
+            canWrite={canWrite}
+          />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+        <h2 className="text-lg font-semibold tracking-tight">Banner 1 · hero</h2>
+        <p className="mt-1 text-sm text-ink-500">
+          প্রথম ব্যানারের শিরোনাম, বর্ণনা, দুটি বাটন ও ঐচ্ছিক ছবি। এটি ক্যারোসেলের প্রথম
+          স্লাইড।
+        </p>
+        <div className="mt-4">
+          <HomeContentForm content={content} directUpload={directUpload} canWrite={canWrite} />
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+        <h2 className="text-lg font-semibold tracking-tight">Banners 2–6</h2>
+        <p className="mt-1 text-sm text-ink-500">
+          বাকি পাঁচটি স্লাইড। ছবি, শিরোনাম, ছোট বর্ণনা ও একটি বাটন দিতে পারবেন; খালি স্লট
+          বাদ পড়বে।
+        </p>
+        <div className="mt-4">
+          <BannerSlotsForm
+            banners={banners}
+            directUpload={directUpload}
+            canWrite={canWrite}
+          />
+        </div>
       </section>
 
       <section className="rounded-2xl border border-dashed border-slate-300 p-4 text-sm text-ink-600">
@@ -70,8 +118,8 @@ export default async function FrontPageEditor() {
           <Link href="/products" className="font-medium text-brand-700 hover:underline">
             Products
           </Link>
-          . Archived or unpublished products disappear from the shop immediately, which is
-          the point: the front page can never advertise something you no longer sell.
+          . Archived or unpublished products disappear from the shop immediately, which
+          is the point: the front page can never advertise something you no longer sell.
         </p>
       </section>
     </div>

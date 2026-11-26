@@ -453,21 +453,38 @@ pending payment `FAILED`.
 ### Front page
 
 The shop leads with products: categories, featured items and new arrivals come
-first, and the banner sits at the foot of the page so a phone shows the catalogue
-without scrolling past marketing copy. Its words are editable, its layout is not.
+first, and the banner carousel sits at the foot of the page so a phone shows the
+catalogue without scrolling past marketing copy.
 
 **Console → Front page** (`/storefront`, permission `content.read` to view,
-`content.write` to save) edits one row in `storefront_home`: the kicker, heading,
-paragraph, two buttons (label + link) and up to four trust chips. Clearing a
-label hides that button. Links must be same-site paths starting with `/` —
-`javascript:`, `//host` and `https://` are rejected on save *and* again when the
-hero renders, so an old or hand-inserted row cannot become an open redirect.
+`content.write` to save) has three narrow forms instead of a page builder:
+
+- **Logo and shop name** — an uploaded mark for the header plus the wordmark
+  beside it. No image falls back to the green letter badge, so the header is
+  never empty. The brand row is cached and tagged, so saving refreshes every
+  storefront page without a database read per request.
+- **Banner 1 · hero** — the kicker, hero title, paragraph, two buttons and an
+  optional background photo. Clearing a label hides that button.
+- **Banners 2–6** — five fixed slots, each with a photo, title, short line and
+  one optional button.
+
+The carousel holds at most six slides, is one fifth of the viewport tall
+(`20vh`, with a 150px minimum so text stays readable), and advances every ten
+seconds. It pauses on hover or keyboard focus, stops in a hidden tab, and turns
+auto-advance off under `prefers-reduced-motion`; the arrows and dots still work.
+The first slide is server-rendered, so the banner is complete before JavaScript
+runs. Empty slots are skipped; a cleared slot keeps its row with
+`isActive = false` instead of being deleted.
+
+Links must be same-site paths starting with `/` — `javascript:`, `//host` and
+`https://` are rejected on save *and* again when the slides are built, so an old
+or hand-inserted row cannot become an open redirect.
 
 Saving revalidates `/` immediately; the page also revalidates on a 120-second
-ISR window. Nothing else is stored: categories, featured products and new
-arrivals stay derived from the catalogue, so archiving a product removes it from
-the front page without anyone editing copy. With no saved row the storefront
-renders the shipped defaults, so a fresh deployment is complete on day one.
+ISR window. Categories, featured products and new arrivals stay derived from the
+catalogue, so archiving a product removes it from the front page without anyone
+editing copy. With no saved row the storefront renders the shipped defaults, so
+a fresh deployment is complete on day one.
 
 Signing out is deliberately explicit: staff land on `/login?signedOut=1` and
 shoppers on `/account/login?signedOut=1`, each with a short confirmation. The

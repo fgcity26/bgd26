@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 
@@ -22,8 +23,29 @@ export type HomeContent = {
   primaryHref: string;
   secondaryLabel: string;
   secondaryHref: string;
-  /** Zero to four short chips beside the copy. */
+  /** Zero to four short chips under the carousel. */
   bullets: string[];
+  /** Uploaded brand mark; `null` falls back to the letter badge. */
+  logoAssetId: string | null;
+  /** Wordmark beside the mark. Empty hides it. */
+  logoText: string;
+  /** Optional photo behind the first carousel slide. */
+  heroImageAssetId: string | null;
+};
+
+/** A public image as the storefront needs it — id to save, URL to render. */
+export type StorefrontImage = {
+  assetId: string;
+  url: string;
+  width: number | null;
+  height: number | null;
+  alt: string;
+};
+
+/** What the editor and the shop render: the copy plus resolved images. */
+export type HomeEditorContent = HomeContent & {
+  logo: StorefrontImage | null;
+  heroImage: StorefrontImage | null;
 };
 
 export const HOME_CONTENT_DEFAULTS: HomeContent = {
@@ -41,7 +63,12 @@ export const HOME_CONTENT_DEFAULTS: HomeContent = {
     "Dhaka and all divisions",
     "Order updates by mobile",
   ],
+  logoAssetId: null,
+  logoText: "bgd26",
+  heroImageAssetId: null,
 };
+
+export const DEFAULT_LOGO_TEXT = "bgd26";
 
 const MAX_BULLETS = 4;
 
@@ -74,6 +101,9 @@ const link = (required: boolean) =>
       "Use a page on this shop, starting with / (for example /shop).",
     );
 
+/** An uploaded asset id, or empty for "none". */
+const assetId = z.string().trim().max(80).nullish();
+
 export const homeContentSchema = z
   .object({
     kicker: label(60, false),
@@ -84,6 +114,9 @@ export const homeContentSchema = z
     secondaryLabel: label(40, false),
     secondaryHref: link(false),
     bullets: z.array(z.string().trim().max(60)).max(MAX_BULLETS, `Use at most ${MAX_BULLETS} points.`),
+    logoAssetId: assetId,
+    logoText: z.string().trim().max(40).optional(),
+    heroImageAssetId: assetId,
   })
   .superRefine((value, ctx) => {
     if (value.primaryLabel && !value.primaryHref) {
@@ -102,6 +135,11 @@ export const homeContentSchema = z
     }
   });
 
+export const brandingSchema = z.object({
+  logoAssetId: assetId,
+  logoText: z.string().trim().max(40).optional(),
+});
+
 /** Drop blank chips so an empty input row is not stored as an empty chip. */
 export function normaliseBullets(values: readonly string[]): string[] {
   return values
@@ -117,20 +155,82 @@ export class HomeContentError extends Error {
   }
 }
 
+function optionalId(value: string | null | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 /** Parse untrusted input (a form) and throw the first readable problem. */
 export function parseHomeContent(input: unknown): HomeContent {
   const parsed = homeContentSchema.safeParse(input);
   if (!parsed.success) {
     throw new HomeContentError(parsed.error.issues[0]?.message ?? "Check the front page fields.");
   }
-  return parsed.data;
+  return {
+    kicker: parsed.data.kicker,
+    heading: parsed.data.heading,
+    subheading: parsed.data.subheading,
+    primaryLabel: parsed.data.primaryLabel,
+    primaryHref: parsed.data.primaryHref,
+    secondaryLabel: parsed.data.secondaryLabel,
+    secondaryHref: parsed.data.secondaryHref,
+    bullets: parsed.data.bullets,
+    logoAssetId: optionalId(parsed.data.logoAssetId),
+    logoText: parsed.data.logoText ?? DEFAULT_LOGO_TEXT,
+    heroImageAssetId: optionalId(parsed.data.heroImageAssetId),
+  };
+}
+
+type AssetRow = {
+  id: string;
+  storageKey: string;
+  width: number | null;
+  height: number | null;
+  altText: string | null;
+};
+
+/** Map a stored asset to the URL/alt pair the storefront renders. */
+export function storefrontImage(asset: AssetRow | null | undefined): StorefrontImage | null {
+  if (!asset) return null;
+  return {
+    assetId: asset.id,
+    url: `/media/${asset.storageKey}`,
+    width: asset.width,
+    height: asset.height,
+    alt: asset.altText ?? "",
+  };
+}
+
+const ASSET_SELECT = {
+  id: true,
+  storageKey: true,
+  width: true,
+  height: true,
+  altText: true,
+} as const;
+
+/**
+ * Only public gallery images may sit on the storefront.
+ *
+ * An id is not trusted just because the form sent it: a private proof or a
+ * customer's customisation file must never be promoted to the home page.
+ */
+async function assertStorefrontImage(id: string | null): Promise<void> {
+  if (!id) return;
+  const asset = await prisma.mediaAsset.findFirst({
+    where: { id, mediaType: "GALLERY", visibility: "PUBLIC" },
+    select: { id: true },
+  });
+  if (!asset) {
+    throw new HomeContentError("That image is no longer available. Upload it again.");
+  }
 }
 
 /**
  * The copy the storefront should render. Never throws for a missing row: a new
  * deployment has no row until the owner saves the form once.
  */
-export async function getHomeContent(): Promise<HomeContent> {
+export async function getHomeContent(): Promise<HomeEditorContent> {
   const row = await prisma.storefrontHome.findUnique({
     where: { id: "home" },
     select: {
@@ -142,10 +242,17 @@ export async function getHomeContent(): Promise<HomeContent> {
       secondaryLabel: true,
       secondaryHref: true,
       bullets: true,
+      logoAssetId: true,
+      logoText: true,
+      heroImageAssetId: true,
+      logoAsset: { select: ASSET_SELECT },
+      heroImage: { select: ASSET_SELECT },
     },
   });
 
-  if (!row) return HOME_CONTENT_DEFAULTS;
+  if (!row) {
+    return { ...HOME_CONTENT_DEFAULTS, logo: null, heroImage: null };
+  }
 
   return {
     kicker: row.kicker,
@@ -156,8 +263,43 @@ export async function getHomeContent(): Promise<HomeContent> {
     secondaryLabel: row.secondaryLabel,
     secondaryHref: row.secondaryHref,
     bullets: row.bullets,
+    logoAssetId: row.logoAssetId,
+    logoText: row.logoText,
+    heroImageAssetId: row.heroImageAssetId,
+    logo: storefrontImage(row.logoAsset),
+    heroImage: storefrontImage(row.heroImage),
   };
 }
+
+/** The header only needs the mark and the wordmark. */
+export async function getStorefrontBranding(): Promise<{
+  logoText: string;
+  logo: StorefrontImage | null;
+}> {
+  const row = await prisma.storefrontHome.findUnique({
+    where: { id: "home" },
+    select: {
+      logoText: true,
+      logoAsset: { select: ASSET_SELECT },
+    },
+  });
+
+  return {
+    logoText: row?.logoText ?? DEFAULT_LOGO_TEXT,
+    logo: storefrontImage(row?.logoAsset),
+  };
+}
+
+/**
+ * The header renders on every storefront page, so its one row is cached across
+ * requests. Saving the brand revalidates the tag, which keeps the logo instant
+ * without a database round-trip on every catalogue view.
+ */
+export const getCachedStorefrontBranding = unstable_cache(
+  getStorefrontBranding,
+  ["storefront-branding"],
+  { tags: ["storefront-branding"], revalidate: 120 },
+);
 
 /** Upsert the single row. Validated here as well, not only in the action. */
 export async function saveHomeContent(
@@ -165,6 +307,7 @@ export async function saveHomeContent(
   actorUserId: string,
 ): Promise<HomeContent> {
   const content = parseHomeContent(input);
+  await assertStorefrontImage(content.heroImageAssetId);
 
   await prisma.storefrontHome.upsert({
     where: { id: "home" },
@@ -174,4 +317,30 @@ export async function saveHomeContent(
   });
 
   return content;
+}
+
+/** Save only the brand mark and wordmark, leaving the banner copy untouched. */
+export async function saveBranding(
+  input: unknown,
+  actorUserId: string,
+): Promise<{ logoAssetId: string | null; logoText: string }> {
+  const parsed = brandingSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new HomeContentError(parsed.error.issues[0]?.message ?? "Check the logo fields.");
+  }
+
+  const logoAssetId = optionalId(parsed.data.logoAssetId);
+  await assertStorefrontImage(logoAssetId);
+
+  const logoText = parsed.data.logoText ?? DEFAULT_LOGO_TEXT;
+  const data = { logoAssetId, logoText, updatedByUserId: actorUserId };
+
+  await prisma.storefrontHome.upsert({
+    where: { id: "home" },
+    update: data,
+    create: { id: "home", ...HOME_CONTENT_DEFAULTS, ...data },
+    select: { id: true },
+  });
+
+  return { logoAssetId, logoText };
 }

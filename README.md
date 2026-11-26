@@ -28,8 +28,8 @@ dropshipping, supplier orders, direct shipments and dropship cost of goods sold 
 is complete and approved (20 Nov 2026). Phase 3 module 9 — customer accounts,
 saved addresses, order history and online loyalty redemption — is complete and
 approved (22 Nov 2026). Phase 3 module 10 — a read-and-draft AI assistant with
-live product, delivery and order lookups — is complete and awaits owner
-approval. WhatsApp notifications (4c) are skipped until their credentials
+live product, delivery and order lookups — is complete and approved
+(26 Nov 2026). WhatsApp notifications (4c) are skipped until their credentials
 arrive. See `docs/PHASE_2_STATUS.md`.
 
 ## Requirements

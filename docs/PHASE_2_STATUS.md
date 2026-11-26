@@ -76,7 +76,7 @@ password-protected profile. A signed-in checkout forces the account's own mobile
 and allows spending points up to 20 % of net merchandise through the same
 redemption engine as the counter.
 
-**Phase 3 module 10 complete, awaiting owner approval (23 November 2026).** The
+**Phase 3 module 10 complete and approved (26 November 2026).** The
 staff console now has an assistant that answers product, stock, delivery and
 order questions from the live database and can create a **draft** order. It
 cannot take payment, refund, discount, adjust stock or post a journal. It runs
@@ -1356,7 +1356,7 @@ npm run typecheck / lint / build      → clean (98 routes)
     tells the customer to message the shop, and staff reset after checking the
     last order. Inventing an insecure reset would be worse than a slow one.
 
-## Phase 3, module 10 — AI assistant, read and draft only (awaiting approval)
+## Phase 3, module 10 — AI assistant, read and draft only (approved 26 November 2026)
 
 | Area | Detail |
 | --- | --- |
@@ -1485,13 +1485,12 @@ check and is not supported by Next 16 or Prisma 7.
 > serverless request cap never applies. `bgd26.com` is added to the project and
 > waits only on its DNS records; see `docs/DEPLOY_VERCEL.md`.
 
-## Next: after module 10
+## Next: the remaining backlog
 
 Modules 4a (accounting), 4b (loyalty), 5a (storefront), 5b (shipping), 5c
 (financial statements), 6 (supplier settlement), 7 (engraving production), 8
-(dropshipping), 9 (customer accounts) and 10 (assistant) are built; module 10
-waits for approval. Module 4c (WhatsApp) was skipped for now and needs its own
-gate:
+(dropshipping), 9 (customer accounts) and 10 (assistant) are built and
+approved. Module 4c (WhatsApp) was skipped for now and needs its own gate:
 
 1. **4c — WhatsApp.** Official Cloud API only: template messages for order
    confirmation, shipping and refund updates, opt-in tracking, delivery receipts
@@ -1689,7 +1688,7 @@ balance), হিসাবের তালিকা, খাতা (ledger), জ�
 ৯টি লয়্যালটি HTTP যাচাই, ১২টি হিসাব যাচাই, ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই,
 ৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি
 ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি), লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক
-বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬), উৎপাদন (৭), ড্রপশিপ (৮) ও ক্রেতার
-অ্যাকাউন্ট (৯) অনুমোদিত; সহায়ক (১০) আপনার অনুমোদনের অপেক্ষায়। হোয়াটসঅ্যাপ
+বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬), উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার
+অ্যাকাউন্ট (৯) ও সহায়ক (১০) অনুমোদিত। হোয়াটসঅ্যাপ
 (৪সি) আপনার নির্দেশে আপাতত বন্ধ, ও তার তথ্য পেলে শুরু হবে।
 

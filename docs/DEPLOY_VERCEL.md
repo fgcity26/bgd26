@@ -1,8 +1,9 @@
 # Deploying bgd26 to Vercel
 
 Prepared 23 November 2026. Target: **Vercel Hobby first**, functions in
-**Tokyo (`hnd1`)** next to Supabase `chqajgxkwpmpoxsjsxks`, deploy through the
-**Vercel CLI** with a token the owner revokes afterwards.
+**Tokyo (`hnd1`)** next to Supabase `chqajgxkwpmpoxsjsxks`, deployed through
+Vercel's **Git integration** (every push to `main`), with the CLI kept as a
+manual fallback.
 
 > Hobby is for personal, non-commercial projects. bgd26.com is a business, so
 > move to Pro before taking real orders. Nothing here is Hobby-only except the
@@ -32,6 +33,18 @@ DNS records to create at Intelwebhost (the domain currently uses
 Replace the existing `127.0.0.1` apex record; do not change nameservers unless
 you also want Vercel to host DNS (that would move any mail records). Vercel
 issues the TLS certificate once the records resolve.
+
+## Git integration (connected 26 November 2026)
+
+The project is connected to GitHub **`fgcity26/bgd26`** under the `fgcity-26`
+team, production branch **`main`**. From now on a push to `main` builds and
+deploys production by itself; no token needs to be passed around. Pull requests
+get preview URLs, which fail at prerender until Preview environment variables
+exist — see §6.
+
+If the repository is ever renamed or transferred, reconnect it under **Project →
+Settings → Git**; Vercel's GitHub App must keep access to the repository. The
+CLI deploy below still works for an emergency rollback or before a push lands.
 
 ## 1. What the repository already does for Vercel
 

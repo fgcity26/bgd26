@@ -614,8 +614,9 @@ until then the console shows the confirmation link so the flow can be tested.
 
 Deployment to Vercel — environment variables, migrations, domain and the
 serverless upload path — is documented in
-[`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md). `vercel.json` pins functions
-to `hnd1` (Tokyo) beside the Supabase project.
+[`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md). The project is connected to
+GitHub, so a push to `main` deploys production automatically; `vercel.json`
+pins functions to `hnd1` (Tokyo) beside the Supabase project.
 
 | Script | What it does |
 | --- | --- |

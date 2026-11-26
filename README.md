@@ -469,7 +469,7 @@ catalogue without scrolling past marketing copy.
   one optional button.
 
 The carousel holds at most six slides, is one fifth of the viewport tall
-(`20vh`, with a 150px minimum so text stays readable), and advances every ten
+(`20vh`, with a 120px minimum so a short landscape screen stays readable), and advances every ten
 seconds. It pauses on hover or keyboard focus, stops in a hidden tab, and turns
 auto-advance off under `prefers-reduced-motion`; the arrows and dots still work.
 The first slide is server-rendered, so the banner is complete before JavaScript

@@ -80,7 +80,7 @@ export function HomeBanners({
             setPaused(false);
           }
         }}
-        className="relative h-[20vh] min-h-[150px] overflow-hidden rounded-3xl bg-brand-700 text-white"
+        className="relative h-[20vh] min-h-[120px] overflow-hidden rounded-3xl bg-brand-700 text-white"
       >
         {slides.map((slide, slideIndex) => {
           const active = slideIndex === current;
@@ -121,30 +121,30 @@ export function HomeBanners({
                 </div>
               )}
 
-              <div className="relative flex h-full flex-col justify-center gap-1 px-5 py-4 sm:px-8">
-                {slide.kicker ? (
-                  <p className="hidden text-xs font-medium text-brand-100 sm:block">
-                    {slide.kicker}
-                  </p>
-                ) : null}
-                <h2 className="line-clamp-2 max-w-2xl text-lg font-bold leading-tight tracking-tight sm:text-2xl lg:text-3xl">
-                  {slide.title}
-                </h2>
-                {slide.subtitle ? (
-                  <p className="line-clamp-2 hidden max-w-xl text-xs leading-relaxed text-white/85 sm:block sm:text-sm">
-                    {slide.subtitle}
-                  </p>
-                ) : null}
+              <div className="relative flex h-full items-center gap-3 px-5 pb-8 pt-4 sm:gap-5 sm:px-8">
+                <div className="min-w-0 flex-1">
+                  {slide.kicker ? (
+                    <p className="hidden text-[11px] font-medium leading-4 text-brand-100 sm:block">
+                      {slide.kicker}
+                    </p>
+                  ) : null}
+                  <h2 className="line-clamp-2 text-base font-bold leading-tight tracking-tight sm:text-xl lg:text-2xl">
+                    {slide.title}
+                  </h2>
+                  {slide.subtitle ? (
+                    <p className="mt-0.5 line-clamp-1 hidden max-w-xl text-xs leading-snug text-white/85 sm:block">
+                      {slide.subtitle}
+                    </p>
+                  ) : null}
+                </div>
                 {slide.linkHref && slide.linkLabel ? (
-                  <div className="mt-2">
-                    <Link
-                      href={slide.linkHref}
-                      tabIndex={active ? 0 : -1}
-                      className="inline-flex min-h-9 items-center rounded-lg bg-white px-4 text-xs font-semibold text-brand-800 hover:bg-brand-50 sm:text-sm"
-                    >
-                      {slide.linkLabel}
-                    </Link>
-                  </div>
+                  <Link
+                    href={slide.linkHref}
+                    tabIndex={active ? 0 : -1}
+                    className="inline-flex min-h-8 shrink-0 items-center rounded-lg bg-white px-3 text-xs font-semibold text-brand-800 hover:bg-brand-50 sm:min-h-9 sm:px-4 sm:text-sm"
+                  >
+                    {slide.linkLabel}
+                  </Link>
                 ) : null}
               </div>
             </article>
@@ -152,8 +152,16 @@ export function HomeBanners({
         })}
 
         {count > 1 ? (
-          <>
-            <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1.5">
+          <div className="absolute bottom-2 right-2 flex items-center gap-1 sm:bottom-3 sm:right-3">
+            <button
+              type="button"
+              onClick={() => go(current - 1)}
+              aria-label="Previous banner"
+              className="grid size-7 place-items-center rounded-full bg-slate-950/30 text-sm text-white hover:bg-slate-950/55"
+            >
+              ‹
+            </button>
+            <div className="flex items-center gap-1.5 px-1">
               {slides.map((slide, slideIndex) => (
                 <button
                   key={slide.key}
@@ -167,24 +175,15 @@ export function HomeBanners({
                 />
               ))}
             </div>
-
-            <button
-              type="button"
-              onClick={() => go(current - 1)}
-              aria-label="Previous banner"
-              className="absolute left-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-slate-950/30 text-white hover:bg-slate-950/55 sm:left-2"
-            >
-              ‹
-            </button>
             <button
               type="button"
               onClick={() => go(current + 1)}
               aria-label="Next banner"
-              className="absolute right-1 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-full bg-slate-950/30 text-white hover:bg-slate-950/55 sm:right-2"
+              className="grid size-7 place-items-center rounded-full bg-slate-950/30 text-sm text-white hover:bg-slate-950/55"
             >
               ›
             </button>
-          </>
+          </div>
         ) : null}
       </section>
 

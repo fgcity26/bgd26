@@ -132,7 +132,7 @@ export function HomeBanners({
                     {slide.title}
                   </h2>
                   {slide.subtitle ? (
-                    <p className="mt-0.5 line-clamp-1 hidden max-w-xl text-xs leading-snug text-white/85 sm:block">
+                    <p className="mt-0.5 hidden max-w-xl text-xs leading-snug text-white/85 sm:line-clamp-2">
                       {slide.subtitle}
                     </p>
                   ) : null}

@@ -86,6 +86,36 @@ for previews.
 Optional now, required when the module is switched on: `AI_API_KEY`,
 `AI_MODEL`, `SSLCOMMERZ_*`, `WHATSAPP_*`, courier keys, `DIRECT_URL` (CLI only).
 
+### WhatsApp (module 4c)
+
+The local simulator is the default and needs nothing. To send through Meta,
+add these to **Production** (never as `NEXT_PUBLIC_*`):
+
+| Variable | Value |
+| --- | --- |
+| `WHATSAPP_PROVIDER` | `cloud` (omit to auto-detect from the phone id + token) |
+| `WHATSAPP_PHONE_NUMBER_ID` | Meta phone number id |
+| `WHATSAPP_ACCESS_TOKEN` | system-user access token |
+| `WHATSAPP_APP_SECRET` | Meta app secret — verifies every webhook HMAC |
+| `WHATSAPP_VERIFY_TOKEN` | a random string, also entered in Meta's webhook setup |
+| `WHATSAPP_BUSINESS_NUMBER` | display number, e.g. `+1859180732` |
+| `WHATSAPP_WORKER_SECRET` | random secret for `/api/whatsapp/worker`; `CRON_SECRET` also works |
+| `WHATSAPP_MAX_ATTEMPTS` | `5` |
+| `WHATSAPP_RETRY_BASE_SECONDS` | `60` |
+| `WHATSAPP_RETRY_MAX_SECONDS` | `3600` |
+| `WHATSAPP_SEND_TIMEOUT_MS` | `15000` |
+
+Register the webhook URL `https://bgd26.com/api/whatsapp/webhook` in Meta with
+the same verify token and subscribe to the `messages` field. Templates ship
+`PENDING`; copy Meta's approved wording and mark each one `APPROVED` in
+`/whatsapp/templates` before a live send is allowed.
+
+`vercel.json` adds one cron, `0 4 * * *` (10:00 Dhaka), to
+`/api/whatsapp/worker?limit=20`. Vercel automatically sends `CRON_SECRET` as a
+bearer token; setting `WHATSAPP_WORKER_SECRET` as well lets you drain the queue
+from the console or `curl`. Each event also attempts one inline send, so the
+cron is a safety net rather than the primary path.
+
 Never set on Vercel: `SEED_OWNER_PASSWORD`, `SEED_OWNER_PIN`,
 `SEED_ALLOW_PROD`, `STORAGE_LOCAL_DIR`, `STORAGE_LOCAL_BUCKET`, or any URL with
 `sslmode=no-verify` (that mode exists only for the local sandbox's TLS proxy).
@@ -110,7 +140,9 @@ CLI also accepts the local `sslmode=no-verify` convention used in
 
 Order for each release: **migrate first, deploy second**. Migrations must stay
 backward compatible with the running version (add columns/tables; drop in a
-later release).
+later release). Module 4c is split into two folders because PostgreSQL cannot
+use a newly added enum value in the same transaction: `whatsapp_notifications`
+adds the schema, `whatsapp_defaults` inserts the settings row and templates.
 
 Reference data is already seeded on the current project. Never run
 `npm run db:seed` in Vercel.

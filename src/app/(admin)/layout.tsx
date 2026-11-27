@@ -36,6 +36,12 @@ const NAV: Array<NavItem & { anyOf?: string[] }> = [
     anyOf: ["ai.read"],
   },
   {
+    href: "/whatsapp",
+    label: "WhatsApp",
+    labelBn: "হোয়াটসঅ্যাপ",
+    anyOf: ["whatsapp.read"],
+  },
+  {
     href: "/payments",
     label: "Payments",
     labelBn: "পেমেন্ট",

@@ -30,6 +30,7 @@
     "verify:dropship": "tsx scripts/verify-dropship.mts",
     "verify:account": "tsx scripts/verify-account.mts",
     "verify:ai": "tsx scripts/verify-ai.mts",
+    "verify:whatsapp": "tsx scripts/verify-whatsapp.mts",
     "verify:invariants": "node scripts/verify-invariants.mjs",
     "sample:catalog": "tsx scripts/seed-sample-catalog.mts",
     "sample:catalog:local": "tsx scripts/seed-sample-catalog.mts --local",

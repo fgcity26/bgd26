@@ -10,6 +10,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPin, hashSecret, isValidManagerPin } from "../src/lib/password";
+import { DEFAULT_TEMPLATES } from "../src/lib/whatsapp/templates";
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
@@ -462,6 +463,30 @@ async function main() {
     update: {},
     create: { userId: owner.id, roleId: ownerRole.id },
   });
+
+  // WhatsApp notification defaults. A reseed never overwrites wording or a
+  // status the owner changed after Meta approval.
+  await prisma.whatsappSetting.upsert({
+    where: { id: "default" },
+    update: {},
+    create: { id: "default" },
+  });
+  for (const template of DEFAULT_TEMPLATES) {
+    await prisma.whatsappTemplate.upsert({
+      where: { name_language: { name: template.name, language: template.language } },
+      update: {},
+      create: {
+        name: template.name,
+        language: template.language,
+        category: template.category,
+        event: template.event,
+        bodyText: template.bodyText,
+        headerText: template.headerText,
+        footerText: template.footerText,
+        variables: [],
+      },
+    });
+  }
 
   const counts = {
     permissions: await prisma.permission.count(),

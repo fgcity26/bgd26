@@ -22,6 +22,11 @@ import {
   reverseLoyaltyForCancellation,
 } from "@/lib/loyalty/service";
 import { createDropshipOrdersForOrder } from "@/lib/dropship/create";
+import {
+  queueOrderNotification,
+  queueRefundNotification,
+  recordOrderConsent,
+} from "@/lib/whatsapp/service";
 import { computeSaleTotals, exceedsCashierCap, TotalsError } from "./totals";
 
 /**
@@ -310,7 +315,7 @@ export async function createSale(
   outer?: Prisma.TransactionClient,
 ): Promise<SaleResult> {
   try {
-    return await run(outer, async (tx) => {
+    const result = await run(outer, async (tx) => {
       if (input.clientTransactionUuid) {
         const existing = await tx.order.findUnique({
           where: { clientTransactionUuid: input.clientTransactionUuid },
@@ -760,6 +765,33 @@ export async function createSale(
         approvalDeferred,
       };
     });
+
+    // A completed online sale is the transactional opt-in: the customer just
+    // gave a mobile number for order updates. Queueing happens after commit so
+    // a template or provider problem can never roll the sale back.
+    if (!outer && !result.duplicate && input.source === "WEB") {
+      try {
+        const customer = await prisma.customer.findUnique({
+          where: { id: result.customerId },
+          select: { mobileNormalized: true },
+        });
+        if (customer) {
+          await recordOrderConsent(
+            result.customerId,
+            customer.mobileNormalized,
+            "online_checkout",
+          );
+          await queueOrderNotification({
+            event: "ORDER_CONFIRMED",
+            orderId: result.orderId,
+            actorUserId: input.actorUserId,
+          });
+        }
+      } catch (error) {
+        console.error("[whatsapp] order confirmation queue failed", result.orderId, error);
+      }
+    }
+    return result;
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -1045,6 +1077,20 @@ export async function setOrderStatus(
       await accrueForOrder(tx, { orderId: order.id, actorUserId });
     }
   });
+
+  // Queue after commit. `outer` means a bigger transaction owns the commit;
+  // that caller queues once its own work succeeds.
+  if (!outer && (next === "CONFIRMED" || next === "SHIPPED")) {
+    try {
+      await queueOrderNotification({
+        event: next === "CONFIRMED" ? "ORDER_CONFIRMED" : "ORDER_SHIPPED",
+        orderId,
+        actorUserId,
+      });
+    } catch (error) {
+      console.error("[whatsapp] status notification failed", orderId, next, error);
+    }
+  }
 }
 
 export async function cancelOrder(
@@ -1553,6 +1599,14 @@ export async function completeRefund(
       data: { totalReturns: { increment: 1 } },
     });
   });
+
+  if (!outer) {
+    try {
+      await queueRefundNotification({ refundId, actorUserId });
+    } catch (error) {
+      console.error("[whatsapp] refund notification failed", refundId, error);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -29,8 +29,11 @@ is complete and approved (20 Nov 2026). Phase 3 module 9 — customer accounts,
 saved addresses, order history and online loyalty redemption — is complete and
 approved (22 Nov 2026). Phase 3 module 10 — a read-and-draft AI assistant with
 live product, delivery and order lookups — is complete and approved
-(26 Nov 2026). WhatsApp notifications (4c) are skipped until their credentials
-arrive. See `docs/PHASE_2_STATUS.md`.
+(26 Nov 2026). Phase 3 module 4c — official WhatsApp Cloud API notifications,
+consent, delivery receipts and a durable retry queue — is built and verified,
+awaiting owner approval; live sends wait only for Meta credentials and approved
+templates, while the local simulator works today. See
+`docs/PHASE_2_STATUS.md`.
 
 ## Requirements
 

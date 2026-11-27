@@ -583,6 +583,18 @@ enum WaMessageStatus {
   READ
   FAILED
   RECEIVED
+  // Recorded, but deliberately not sent: no consent, event disabled, or no
+  // approved template. Keeping the row explains the silence.
+  SKIPPED
+}
+
+enum WaNotificationEvent {
+  ORDER_CONFIRMED
+  ORDER_SHIPPED
+  REFUND_COMPLETED
+  PAYMENT_REMINDER
+  REVIEW_REQUEST
+  MANUAL
 }
 
 enum WaTemplateCategory {
@@ -730,6 +742,7 @@ model User {
   cashMovementsApproved PosCashMovement[]             @relation("CashMovementApprover")
   waConversationsAssigned WhatsappConversation[]      @relation("WhatsappAssignee")
   waMessagesSent        WhatsappMessage[]             @relation("WhatsappSender")
+  waSettingsUpdated     WhatsappSetting[]             @relation("WhatsappSettingUpdater")
   aiConversations       AiConversationLog[]           @relation("AiConversationUser")
   aiActions             AiActionLog[]                 @relation("AiActionActor")
   reviewsModerated      ProductReview[]               @relation("ReviewModerator")
@@ -1839,6 +1852,7 @@ model Order {
   syncLogs          PosSyncLog[]
   aiActions         AiActionLog[]
   supplierLedgers   SupplierLedger[]
+  whatsappMessages  WhatsappMessage[]
 
   @@index([customerId, placedAt])
   @@index([status, placedAt])
@@ -2252,6 +2266,7 @@ model Refund {
 
   items        RefundItem[]
   transactions RefundTransaction[]
+  whatsappMessages WhatsappMessage[]
 
   @@index([orderId, status])
   @@index([customerId, createdAt])
@@ -2959,16 +2974,37 @@ model WhatsappMessage {
   sentByUserId   String?
   sentAt         DateTime?
   rawPayload     Json?
-  createdAt      DateTime        @default(now())
+  // Delivery queue. Outbound rows start QUEUED; the worker claims a row by
+  // setting lockedAt, then records SENT/FAILED and the next retry time.
+  recipient         String?              @db.VarChar(20)
+  event             WaNotificationEvent  @default(MANUAL)
+  templateName      String?
+  templateLanguage  String?
+  templateVariables Json?
+  // One row per business event. A retried action cannot send twice.
+  dedupeKey         String?              @unique
+  relatedOrderId    String?
+  relatedRefundId   String?
+  attemptCount      Int                  @default(0)
+  maxAttempts       Int                  @default(5)
+  nextAttemptAt     DateTime?
+  lastAttemptAt     DateTime?
+  lockedAt          DateTime?
+  createdAt         DateTime             @default(now())
 
-  conversation WhatsappConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  mediaAsset   MediaAsset?          @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
-  template     WhatsappTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  sentBy       User?                @relation("WhatsappSender", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  conversation  WhatsappConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  mediaAsset    MediaAsset?          @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  template      WhatsappTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  sentBy        User?                @relation("WhatsappSender", fields: [sentByUserId], references: [id], onDelete: SetNull)
+  relatedOrder  Order?               @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
+  relatedRefund Refund?              @relation(fields: [relatedRefundId], references: [id], onDelete: SetNull)
 
   @@index([conversationId, createdAt])
   @@index([waMessageId])
   @@index([status])
+  @@index([status, nextAttemptAt])
+  @@index([relatedOrderId])
+  @@index([relatedRefundId])
   @@map("whatsapp_messages")
 }
 
@@ -2978,6 +3014,9 @@ model WhatsappTemplate {
   language       String              @default("bn")
   category       WaTemplateCategory
   status         WaTemplateStatus    @default(PENDING)
+  // Which automatic notification this template belongs to. A template is
+  // matched by event + language, and only an APPROVED one can be sent live.
+  event          WaNotificationEvent?
   bodyText       String
   headerText     String?
   footerText     String?
@@ -2990,7 +3029,24 @@ model WhatsappTemplate {
 
   @@unique([name, language])
   @@index([status])
+  @@index([event, status])
   @@map("whatsapp_templates")
+}
+
+model WhatsappSetting {
+  id                String   @id @default("default")
+  autoSend          Boolean  @default(true)
+  orderConfirmation Boolean  @default(true)
+  orderShipped      Boolean  @default(true)
+  refundCompleted   Boolean  @default(true)
+  paymentReminder   Boolean  @default(false)
+  reviewRequest     Boolean  @default(false)
+  updatedAt         DateTime @updatedAt
+  updatedByUserId   String?
+
+  updatedBy User? @relation("WhatsappSettingUpdater", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@map("whatsapp_settings")
 }
 
 model WhatsappConsent {

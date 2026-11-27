@@ -1,6 +1,7 @@
 import { Prisma, type PaymentMethod } from "@/generated/prisma/client";
 import { ACCOUNTS, postJournal } from "@/lib/accounting/journal";
 import { prisma } from "@/lib/db";
+import { queueOrderNotification } from "@/lib/whatsapp/service";
 import { money } from "@/lib/inventory/decimal";
 import { documentNumber } from "@/lib/inventory/stock";
 import { canTransition, setOrderStatus } from "@/lib/orders/service";
@@ -194,7 +195,7 @@ export async function shipDropshipOrder(
   input: ShipDropshipInput = {},
   outer?: Prisma.TransactionClient,
 ) {
-  return run(outer, async (tx) => {
+  const result = await run(outer, async (tx) => {
     const order = await requireDropshipOrder(tx, id);
     if (!order.order) throw new DropshipServiceError("That dropship order has no customer order.");
     if (order.status !== "CONFIRMED") {
@@ -342,8 +343,26 @@ export async function shipDropshipOrder(
       }
     }
 
-    return { id: order.id, status: "SHIPPED" as const, shipmentNumber: shipment.shipmentNumber };
+    return {
+      id: order.id,
+      orderId: order.order.id,
+      status: "SHIPPED" as const,
+      shipmentNumber: shipment.shipmentNumber,
+    };
   });
+
+  if (!outer) {
+    try {
+      await queueOrderNotification({
+        event: "ORDER_SHIPPED",
+        orderId: result.orderId,
+        actorUserId,
+      });
+    } catch (error) {
+      console.error("[whatsapp] dropship shipped notification failed", result.orderId, error);
+    }
+  }
+  return result;
 }
 
 /** The customer received the parcel; the shipment and the order close. */
@@ -353,7 +372,7 @@ export async function deliverDropshipOrder(
   note?: string | null,
   outer?: Prisma.TransactionClient,
 ) {
-  return run(outer, async (tx) => {
+  const result = await run(outer, async (tx) => {
     const order = await requireDropshipOrder(tx, id);
     if (!order.order) throw new DropshipServiceError("That dropship order has no customer order.");
     if (order.status !== "SHIPPED") {
@@ -428,8 +447,21 @@ export async function deliverDropshipOrder(
       });
     }
 
-    return { id: order.id, status: "DELIVERED" as const };
+    return { id: order.id, orderId: order.order.id, status: "DELIVERED" as const };
   });
+
+  if (!outer) {
+    try {
+      await queueOrderNotification({
+        event: "ORDER_SHIPPED",
+        orderId: result.orderId,
+        actorUserId,
+      });
+    } catch (error) {
+      console.error("[whatsapp] dropship delivered notification failed", result.orderId, error);
+    }
+  }
+  return result;
 }
 
 /** Cancel a supplier order before it ships. After that, a return is the path. */

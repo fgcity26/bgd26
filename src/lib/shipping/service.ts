@@ -4,6 +4,7 @@ import {
   type ShipmentStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
+import { queueOrderNotification } from "@/lib/whatsapp/service";
 import { ACCOUNTS, postJournal } from "@/lib/accounting/journal";
 import { getCourierAdapter } from "@/lib/adapters/couriers/registry";
 import { CourierError } from "@/lib/adapters/couriers/types";
@@ -321,7 +322,7 @@ export async function addTrackingEvent(
   outer?: Prisma.TransactionClient,
 ) {
   try {
-    return await run(outer, async (tx) => {
+    const result = await run(outer, async (tx) => {
       const shipment = await tx.shipment.findUnique({
         where: { id: input.shipmentId },
         select: {
@@ -394,8 +395,29 @@ export async function addTrackingEvent(
         );
       }
 
-      return { id: shipment.id, status: input.status };
+      return { id: shipment.id, orderId: shipment.order.id, status: input.status };
     });
+
+    // Proof of movement is the moment the customer cares about. Queue after
+    // commit; the event dedupe key keeps pickup + delivery to one message.
+    if (
+      !outer &&
+      (input.status === "PICKED_UP" ||
+        input.status === "IN_TRANSIT" ||
+        input.status === "OUT_FOR_DELIVERY" ||
+        input.status === "DELIVERED")
+    ) {
+      try {
+        await queueOrderNotification({
+          event: "ORDER_SHIPPED",
+          orderId: result.orderId,
+          actorUserId: input.actorUserId,
+        });
+      } catch (error) {
+        console.error("[whatsapp] shipment notification failed", result.orderId, error);
+      }
+    }
+    return result;
   } catch (error) {
     return explain(error);
   }

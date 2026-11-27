@@ -86,6 +86,19 @@ audited, mobile numbers are masked, drafts reserve nothing, and converting a
 draft runs the ordinary sale engine so prices, VAT, stock and the journal are
 re-checked before anything real happens.
 
+**Phase 3 module 4c built and verified (27 November 2026), awaiting owner
+approval.** Official WhatsApp Cloud API notifications now run through an adapter
+port with a local simulator as the default. An online checkout records
+transactional opt-in and queues one confirmation; order shipping and completed
+refunds queue their own templates; each business event carries a unique dedupe
+key and a durable retry row. The console has an inbox with the 24-hour reply
+window, a queue with settings and counts, a template registry and a consent
+page. Nothing sends without an `OPTED_IN` row, an enabled event and a stored
+template; a skipped send is recorded with its reason. The webhook verifies
+Meta's HMAC signature, updates delivery receipts monotonically and handles
+`STOP`/`START`. Live Cloud sends wait only for the Meta credentials and approved
+template wording.
+
 ## Module 1 — scaffold, database, seed
 
 | Area | Detail |
@@ -1439,6 +1452,69 @@ npm run typecheck / lint / build      → clean (99 routes)
     order state; they may not create drafts or convert them. That keeps the
     risky step with the people who already own order write access.
 
+## Phase 3, module 4c — WhatsApp notifications (built 27 November 2026, awaiting approval)
+
+| Area | Detail |
+| --- | --- |
+| Scope | Official Meta WhatsApp Cloud API only: order confirmation, shipping and refund updates, delivery receipts, a customer inbox, opt-in/opt-out and a durable retry queue. No unofficial library and no bulk marketing. |
+| Provider | An adapter port (`src/lib/adapters/whatsapp/`) with `local` (default simulator, no credentials, every message still persisted) and `cloud` (Graph API). `WHATSAPP_PROVIDER=local|cloud`; a cloud request with missing values falls back to local and the console names them. |
+| Consent | Online checkout (`source = WEB`) records transactional opt-in with source `online_checkout`. POS/admin orders need staff-recorded consent. An explicit opt-out always wins; a later order cannot turn it back on. `STOP` and `START` are handled by the webhook. |
+| Gating | No `OPTED_IN` row, a disabled event or a missing template produces a `SKIPPED` row with the reason. A live Cloud send also requires the template status to be `APPROVED`; the simulator can render `PENDING` wording. |
+| Outbox | `whatsapp_messages` carries `dedupeKey` (unique), event, template name/language/variables, recipient, attempt count, max attempts, `nextAttemptAt` and `lockedAt`. One business event produces at most one row; a five-minute claim lock makes concurrent workers safe. |
+| Retry | Transient failures (network, timeout, 429, 5xx) return to `QUEUED` with exponential backoff — 60s, 120s, 240s… capped at one hour, five attempts by default. A bad number, unapproved template or revoked token fails immediately. `retryFailedMessages` requeues a failed row and resets its budget. |
+| Worker | `/api/whatsapp/worker` drains due rows and requires `WHATSAPP_WORKER_SECRET` or `CRON_SECRET`; with no secret it is open only outside production. `vercel.json` runs it daily at 04:00 UTC (10:00 Dhaka) as a safety net; each event also tries once inline when `autoSend` is on. |
+| Webhook | `GET` answers Meta's verify-token handshake. `POST` checks `X-Hub-Signature-256` with a constant-time HMAC over the raw body before parsing. Inbound messages refresh the 24-hour window and increment unread; statuses only move forward (`SENT → DELIVERED → READ`); duplicates are acknowledged and ignored by `waMessageId`. |
+| Inbox | Conversations, unread counts, consent and the 24-hour window are visible. A reply is allowed only inside the window and moves the conversation to `HANDOVER`; outside it the page points at an approved template instead of failing after submit. |
+| Hooks | `createSale` (WEB confirmation + consent), `setOrderStatus` (confirmed/shipped), `completeRefund`, shipping `addTrackingEvent` (pickup/transit/out-for-delivery/delivered) and dropship ship/deliver. Every hook runs after the business transaction commits and never throws into it. |
+| Permissions | `OWNER` and `MANAGER` have `whatsapp.*` through the wildcard; `CASHIER` has none by default. Pages and actions re-check `whatsapp.read`/`whatsapp.write`; nav is gated by `whatsapp.read`. |
+| Routes | `/whatsapp` (inbox), `/whatsapp/queue` (counts, settings, outbox), `/whatsapp/templates` (registry + upsert form), `/whatsapp/consents` (opt-in/out + search), `/api/whatsapp/webhook`, `/api/whatsapp/worker`. |
+
+```text
+npm test                    → 179/179 (167 existing + 12 WhatsApp unit tests)
+npm run verify:whatsapp     → 15/15 (against `next start`, real HTTP + database)
+  an anonymous visitor is sent to login from WhatsApp
+  a cashier has no WhatsApp access by default
+  the owner sees the live provider state and the new conversation
+  the queue page shows the event, settings and the send button
+  the template registry lists the shipped defaults and approval state
+  the consent page lists the online-checkout opt-in
+  an online checkout records opt-in and sends one confirmation
+  the event dedupe key refuses to queue a second confirmation
+  an opt-out skips the next event and an order cannot flip it back
+  a signed delivery receipt moves the confirmation to DELIVERED
+  an unsigned or tampered webhook body is rejected
+  a STOP reply opts the customer out and a duplicate is ignored
+  a retryable failure returns to the queue with backoff
+  a live adapter refuses a template that is not APPROVED
+  the worker endpoint refuses an anonymous caller and accepts its secret
+
+npm run typecheck / lint / build → clean (103 routes)
+npx prisma migrate deploy       → 20261127100000_whatsapp_notifications applied
+                                  20261127100100_whatsapp_defaults applied
+```
+
+### Design decisions locked in this module
+
+1. **A message is never part of the money transaction.** Hooks run after
+   commit; a provider outage is a queued row, not a failed sale or shipment.
+2. **Consent is a row, not a checkbox in the UI.** Sending reads the unique
+   consent record. An explicit opt-out beats every later order.
+3. **Silence is recorded.** No consent, an off switch or a missing template is a
+   visible `SKIPPED` row with a reason, not an unexplained absence.
+4. **Registered is not approved.** A live Cloud send checks the template status;
+   only `APPROVED` wording can leave the server. The simulator can test
+   `PENDING` copy.
+5. **The queue is the database.** A unique dedupe key, a claim lock and
+   `nextAttemptAt` replace a separate broker and make a retried action safe.
+6. **Retry transient, stop permanent.** Network, 429 and 5xx back off; a bad
+   recipient or unapproved template fails at once instead of burning attempts.
+7. **Signatures are checked before parsing.** The raw body is verified with a
+   constant-time HMAC; unsigned or tampered traffic is refused.
+8. **The 24-hour window is Meta's rule.** The console checks it before accepting
+   a reply, so staff get a plain explanation and a template link.
+9. **A cashier does not need customer conversations.** WhatsApp access starts
+   with owner and manager; it is not granted by the order permissions.
+
 ## Running it locally
 
 ```bash
@@ -1490,12 +1566,14 @@ check and is not supported by Next 16 or Prisma 7.
 Modules 4a (accounting), 4b (loyalty), 5a (storefront), 5b (shipping), 5c
 (financial statements), 6 (supplier settlement), 7 (engraving production), 8
 (dropshipping), 9 (customer accounts) and 10 (assistant) are built and
-approved. Module 4c (WhatsApp) was skipped for now and needs its own gate:
+approved. Module 4c (WhatsApp) is built and verified and waits only for the
+owner's approval and, for real sends, the Meta credentials:
 
-1. **4c — WhatsApp.** Official Cloud API only: template messages for order
-   confirmation, shipping and refund updates, opt-in tracking, delivery receipts
-   and a retry queue. Needs the WABA ID, business number and approved templates
-   before it can send anything real.
+1. **4c — WhatsApp (awaiting approval).** Official Cloud API only: order
+   confirmation, shipping and refund templates, online-checkout opt-in, delivery
+   receipts and a durable retry queue. The local simulator works today; live
+   sends need the WABA ID, phone number ID, access token, app secret, verify
+   token and Meta-approved template wording.
 
 The remaining backlog, each with its own gate: courier API adapters for Pathao,
 Steadfast and RedX; an automated customer password-reset channel (SMS or
@@ -1671,6 +1749,27 @@ balance), হিসাবের তালিকা, খাতা (ledger), জ�
 হলে সহায়ক মানুষকে হস্তান্তর করে, কখনো বিক্রি বা কাউন্টার আটকায় না। ক্যাশিয়ার
 শুধু পড়তে পারেন, ড্রাফট তৈরি বা রূপান্তর করতে পারেন না।
 
+মডিউল ৪সি-এ অফিসিয়াল WhatsApp Cloud API যুক্ত হয়েছে। শুরুতে কোনো Meta
+ক্রেডেনশিয়াল ছাড়াই একটি লোকাল সিমুলেটর চলে; `WHATSAPP_PROVIDER=cloud` দিলে
+এবং ফোন নম্বর আইডি, অ্যাক্সেস টোকেন, অ্যাপ সিক্রেট ও ভেরিফাই টোকেন থাকলে আসল
+বার্তা যায়—কিছু বাকি থাকলে অ্যাপ সিমুলেটরেই থাকে এবং কনসোল ঠিক কী অনুপস্থিত
+বলে দেয়। অনলাইন চেকআউট স্বয়ংক্রিয়ভাবে সম্মতি (opt-in) লেখে; POS বা অ্যাডমিন
+অর্ডারে স্টাফ কনসোল থেকে সম্মতি দিতে হয়। স্পষ্ট opt-out সবসময় জেতে—পরে করা
+অর্ডার তা আবার চালু করতে পারে না; `STOP`/`START` রিপ্লাইও কাজ করে। সম্মতি,
+ইভেন্ট বন্ধ বা টেমপ্লেট না থাকলে কিছু পাঠানো হয় না, বরং কারণসহ `SKIPPED` সারি
+জমা থাকে। প্রতিটি ব্যবসায়িক ইভেন্টের একটি ইউনিক dedupe key, পাঁচ মিনিটের
+claim lock এবং ব্যাকঅফসহ পুনরায় চেষ্টার সারি আছে; নেটওয়ার্ক, 429 বা 5xx
+ব্যর্থতা ৬০ সেকেন্ড থেকে এক ঘণ্টা পর্যন্ত ব্যাকঅফে আবার চলে, আর ভুল নম্বর বা
+অননুমোদিত টেমপ্লেট সঙ্গে সঙ্গে থেমে যায়। লাইভ পাঠের আগে টেমপ্লেটের অবস্থা
+`APPROVED` হতে হয়; লোকাল সিমুলেটরে `PENDING` লেখাও পরীক্ষা করা যায়। ইনবক্সে
+২৪ ঘণ্টার customer-service উইন্ডোর ভেতরেই উত্তর দেওয়া যায়, বাইরে শুধু
+অনুমোদিত টেমপ্লেট; উত্তর দিলে কথোপকথন `HANDOVER`-এ যায়। ওয়েবহুকের প্রতিটি
+POST-এর `X-Hub-Signature-256` ধ্রুব-সময়ের HMAC দিয়ে যাচাই হয়, ডেলিভারি
+রিসিট শুধু সামনের দিকে এগোয়, আর Meta-র পুনরাবৃত্তি `waMessageId` দিয়ে বাদ
+পড়ে। ক্যাশিয়ারের ডিফল্টে হোয়াটসঅ্যাপ অনুমতি নেই; মালিক ও ম্যানেজার
+`whatsapp.*` পান। আসল পাঠের জন্য শুধু WABA আইডি, ফোন নম্বর আইডি, অ্যাক্সেস
+টোকেন, অ্যাপ সিক্রেট, ভেরিফাই টোকেন ও Meta-অনুমোদিত টেমপ্লেট লেখা দরকার।
+
 শেষবারের আপডেটে প্রথম পাতার ব্যানারটি পণ্যের নিচে সরানো হয়েছে এবং সেটি
 কনসোল থেকেই সম্পাদনাযোগ্য। এখন দোকানের হেডারে নিজের **লোগো** ও নাম বসানো যায়
 (ছবি না দিলে সবুজ অক্ষরের ব্যাজ), প্রথম ব্যানারের **হিরো শিরোনাম**, বর্ণনা ও
@@ -1682,13 +1781,14 @@ balance), হিসাবের তালিকা, খাতা (ledger), জ�
 নিজের দোকানের পথ হতে পারে। খালি ব্যানার বাদ পড়ে, আর মুছে ফেলা স্লটের সারি
 `isActive = false` হয়ে থাকে—কিছুই হার্ড-ডিলিট হয় না।
 
-১৬৭টি ইউনিট ও ডেটাবেস টেস্ট, ১১টি সহায়ক HTTP যাচাই, ১৫টি অ্যাকাউন্ট HTTP যাচাই, ১৪টি
-ড্রপশিপ HTTP যাচাই, ১১টি উৎপাদন HTTP যাচাই, ১১টি সরবরাহকারী নিষ্পত্তি HTTP
-যাচাই, ৮টি বিবরণী HTTP যাচাই, ১০টি চালান HTTP যাচাই, ১৪টি দোকান HTTP যাচাই,
-৯টি লয়্যালটি HTTP যাচাই, ১২টি হিসাব যাচাই, ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই,
-৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি
-ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি), লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক
-বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬), উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার
-অ্যাকাউন্ট (৯) ও সহায়ক (১০) অনুমোদিত। হোয়াটসঅ্যাপ
-(৪সি) আপনার নির্দেশে আপাতত বন্ধ, ও তার তথ্য পেলে শুরু হবে।
+১৭৯টি ইউনিট ও ডেটাবেস টেস্ট, ১৫টি হোয়াটসঅ্যাপ HTTP যাচাই, ১১টি সহায়ক HTTP
+যাচাই, ১৫টি অ্যাকাউন্ট HTTP যাচাই, ১৪টি ড্রপশিপ HTTP যাচাই, ১১টি উৎপাদন HTTP
+যাচাই, ১১টি সরবরাহকারী নিষ্পত্তি HTTP যাচাই, ৮টি বিবরণী HTTP যাচাই, ১০টি চালান
+HTTP যাচাই, ১৪টি দোকান HTTP যাচাই, ৯টি লয়্যালটি HTTP যাচাই, ১২টি হিসাব যাচাই,
+১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই, ৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি
+ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি),
+লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬),
+উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার অ্যাকাউন্ট (৯) ও সহায়ক (১০) অনুমোদিত।
+হোয়াটসঅ্যাপ (৪সি) তৈরি ও যাচাই করা হয়েছে এবং আপনার অনুমোদনের অপেক্ষায়; আসল
+বার্তার জন্য শুধু Meta-র ক্রেডেনশিয়াল ও অনুমোদিত টেমপ্লেট দরকার।
 

@@ -139,3 +139,19 @@ export const DEFAULT_TEMPLATES: Array<{
     footerText: "bgd26.com",
   },
 ];
+
+/**
+ * Storefront password reset. This is an authentication template, not an order
+ * event: it has no WaNotificationEvent, bypasses marketing consent (the
+ * customer asked for it) and carries a copy-code button in Meta's console.
+ */
+export const PASSWORD_RESET_TEMPLATE = {
+  name: "password_reset_otp",
+  language: "bn",
+  category: "AUTHENTICATION" as const,
+  event: null,
+  headerText: null,
+  bodyText:
+    "আপনার bgd26 পাসওয়ার্ড রিসেট কোড: {{1}}\n\nকোডটি ১০ মিনিটের মধ্যে ব্যবহার করুন। আপনি অনুরোধ না করলে এই বার্তাটি উপেক্ষা করুন।",
+  footerText: "bgd26.com",
+};

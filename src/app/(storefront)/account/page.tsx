@@ -18,16 +18,31 @@ const dateOnly = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Dhaka",
 });
 
-export default async function AccountPage() {
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string }>;
+}) {
   const customer = await requireCustomer("/account");
-  const [orders, addresses] = await Promise.all([
+  const [orders, addresses, params] = await Promise.all([
     listCustomerOrders(customer.id, 3),
     listCustomerAddresses(customer.id),
+    searchParams,
   ]);
   const defaultAddress = addresses[0] ?? null;
+  const justReset = params.reset === "1";
 
   return (
     <div className="space-y-5">
+      {justReset ? (
+        <p
+          role="status"
+          className="rounded-xl border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-800"
+        >
+          Your password is updated and you are signed in. · আপনার পাসওয়ার্ড পরিবর্তন হয়েছে।
+        </p>
+      ) : null}
+
       <section className="grid gap-3 sm:grid-cols-3">
         <Link
           href="/account/orders"

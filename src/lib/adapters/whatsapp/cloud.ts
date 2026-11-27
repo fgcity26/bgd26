@@ -29,18 +29,7 @@ export const cloudWhatsappAdapter: WhatsAppAdapter = {
       template: {
         name: input.templateName,
         language: { code: input.language },
-        components:
-          input.variables.length > 0
-            ? [
-                {
-                  type: "body",
-                  parameters: input.variables.map((text) => ({
-                    type: "text",
-                    text: text.slice(0, 1024),
-                  })),
-                },
-              ]
-            : undefined,
+        components: templateComponents(input),
       },
     });
   },
@@ -143,6 +132,32 @@ async function send(body: GraphBody): Promise<SendResult> {
     });
   }
   return { waMessageId: id };
+}
+
+function templateComponents(
+  input: TemplateSendInput,
+): Array<Record<string, unknown>> | undefined {
+  const components: Array<Record<string, unknown>> = [];
+  if (input.variables.length > 0) {
+    components.push({
+      type: "body",
+      parameters: input.variables.map((text) => ({
+        type: "text",
+        text: text.slice(0, 1024),
+      })),
+    });
+  }
+  // Authentication templates with a "Copy code" button expect the code again
+  // in a coupon_code parameter. Reusing {{1}} keeps the two in lockstep.
+  if (input.copyCodeButton && input.variables[0]) {
+    components.push({
+      type: "button",
+      sub_type: "copy_code",
+      index: "0",
+      parameters: [{ type: "coupon_code", coupon_code: input.variables[0].slice(0, 15) }],
+    });
+  }
+  return components.length > 0 ? components : undefined;
 }
 
 /** Meta expects a bare international number, without the leading plus. */

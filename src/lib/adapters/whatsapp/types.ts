@@ -17,6 +17,11 @@ export type TemplateSendInput = {
   language: string;
   /** Positional body parameters, in order: {{1}}, {{2}}, ... */
   variables: string[];
+  /**
+   * Authentication templates may carry a "Copy code" button. Meta then wants
+   * the code again in a button component; the first body variable is reused.
+   */
+  copyCodeButton?: boolean;
   /** Stable key for the local simulator and call-site deduplication. */
   idempotencyKey: string;
 };

@@ -54,9 +54,17 @@ export default async function CustomerLoginPage({
           Create an account
         </Link>
       </p>
+      <p className="text-sm text-ink-600">
+        Forgot your password?{" "}
+        <Link
+          href="/account/forgot-password"
+          className="font-medium text-brand-700 hover:underline"
+        >
+          Reset it with a WhatsApp code
+        </Link>
+      </p>
       <p className="text-xs text-ink-500">
-        Forgot your password? Message the shop on WhatsApp with your mobile number. We reset it
-        after checking your last order.
+        The code goes to the mobile number on your account. It expires in 10 minutes.
       </p>
     </div>
   );

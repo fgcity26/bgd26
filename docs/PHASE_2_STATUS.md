@@ -86,18 +86,27 @@ audited, mobile numbers are masked, drafts reserve nothing, and converting a
 draft runs the ordinary sale engine so prices, VAT, stock and the journal are
 re-checked before anything real happens.
 
-**Phase 3 module 4c built and verified (27 November 2026), awaiting owner
-approval.** Official WhatsApp Cloud API notifications now run through an adapter
-port with a local simulator as the default. An online checkout records
-transactional opt-in and queues one confirmation; order shipping and completed
-refunds queue their own templates; each business event carries a unique dedupe
-key and a durable retry row. The console has an inbox with the 24-hour reply
-window, a queue with settings and counts, a template registry and a consent
-page. Nothing sends without an `OPTED_IN` row, an enabled event and a stored
-template; a skipped send is recorded with its reason. The webhook verifies
-Meta's HMAC signature, updates delivery receipts monotonically and handles
-`STOP`/`START`. Live Cloud sends wait only for the Meta credentials and approved
-template wording.
+**Phase 3 module 4c complete and approved (27 November 2026).** Official
+WhatsApp Cloud API notifications now run through an adapter port with a local
+simulator as the default. An online checkout records transactional opt-in and
+queues one confirmation; order shipping and completed refunds queue their own
+templates; each business event carries a unique dedupe key and a durable retry
+row. The console has an inbox with the 24-hour reply window, a queue with
+settings and counts, a template registry and a consent page. Nothing sends
+without an `OPTED_IN` row, an enabled event and a stored template; a skipped
+send is recorded with its reason. The webhook verifies Meta's HMAC signature,
+updates delivery receipts monotonically and handles `STOP`/`START`. Live Cloud
+sends wait only for the Meta credentials and approved template wording.
+
+**Phase 3 module 4d built and verified (27 November 2026), awaiting owner
+approval.** Customers can now reset their own password from the storefront. They
+enter the mobile number on their account, receive a six-digit code on WhatsApp
+as an authentication template and use it once to set a new password. The code
+lives for ten minutes, allows five attempts and is stored only as a scrypt hash;
+the message history never contains it. Requests are throttled to one a minute,
+three an hour per customer and ten an hour per IP, an unknown number gets the
+same screen as a real one, and a successful reset ends older customer sessions.
+A stopped marketing consent does not block a code the customer asked for.
 
 ## Module 1 — scaffold, database, seed
 
@@ -1282,13 +1291,13 @@ npm run typecheck / lint / build      → clean (90 routes)
 
 | Area | Detail |
 | --- | --- |
-| Scope | Optional storefront accounts layered on the guest flow. The mobile number is the identity. No SMS/WhatsApp OTP, no automated password reset and no social login. |
+| Scope | Optional storefront accounts layered on the guest flow. The mobile number is the identity. No social login; self-service password reset arrived later in module 4d. |
 | Identity | `Customer` gained `passwordHash`, `passwordUpdatedAt`, `failedLoginCount`, `lockedUntil`, `lastLoginAt` and `accountClaimedAt` (migration `20261120090000_customer_accounts`). Customer credentials never live on the staff `User` table, so a storefront login can never become a counter permission. |
 | Session | A separate `bgd26_customer` cookie: HttpOnly, SameSite=Lax, Secure in production, 30-day TTL. The payload carries `scope: "customer"` and the signature covers a `customer.` prefix, so a staff session or a guest order token cannot be swapped for a customer session — or the other way round. |
 | Registration | Name, mobile, optional email, password and confirmation. The password policy is the staff policy: at least 10 characters with a letter and a digit. A fresh mobile creates a customer row; a mobile that already ordered as a guest claims that same row instead of creating a duplicate. |
 | Claim proof | If the mobile already has orders, one order number from that record is required. Without an SMS gateway that is the only ownership proof the shop can ask for; a wrong number is refused and the account is untouched. |
 | Sign-in and lockout | Mobile plus password. Five failures lock the account for fifteen minutes, matching the staff rule. A blocked or soft-deleted customer loses access immediately even while the cookie is still valid. |
-| Password | Changing it requires the current password, refuses the password already in use and clears any lock. A forgotten password is reset manually by the shop after checking the last order; there is no email or SMS reset channel yet. |
+| Password | Changing it requires the current password, refuses the password already in use and clears any lock. Module 4d adds a self-service WhatsApp code reset; staff can still reset manually after checking the last order. |
 | Profile | Name and email are self-service. The mobile number is read-only on the profile page; staff change it, which keeps the login identity under shop control. |
 | Addresses | Up to 20 per customer, soft-deleted. The first address becomes the default, setting a new default clears the old one in one transaction, and deleting the default promotes the most recently updated survivor. Every read and write filters by `customerId`. |
 | Orders | `/account/orders` lists only rows whose `customerId` matches the session. `/account/orders/[id]` returns `notFound()` for another account's order, so the URL is not an ownership proof. Guests keep the signed order link and `/track`. |
@@ -1452,7 +1461,7 @@ npm run typecheck / lint / build      → clean (99 routes)
     order state; they may not create drafts or convert them. That keeps the
     risky step with the people who already own order write access.
 
-## Phase 3, module 4c — WhatsApp notifications (built 27 November 2026, awaiting approval)
+## Phase 3, module 4c — WhatsApp notifications (approved 27 November 2026)
 
 | Area | Detail |
 | --- | --- |
@@ -1515,6 +1524,66 @@ npx prisma migrate deploy       → 20261127100000_whatsapp_notifications applie
 9. **A cashier does not need customer conversations.** WhatsApp access starts
    with owner and manager; it is not granted by the order permissions.
 
+## Phase 3, module 4d — customer password reset over WhatsApp (built 27 November 2026, awaiting approval)
+
+| Area | Detail |
+| --- | --- |
+| Scope | Self-service reset for an existing storefront account. The customer gives the mobile number on the account, receives a six-digit code on WhatsApp and sets a new password. No SMS gateway, no email reset and no staff takeover. |
+| Flow | `/account/forgot-password` requests a code; `/account/reset-password` takes the code, a new password and its confirmation. The login page links to the flow, and a successful reset lands on `/account?reset=1` with a confirmation banner. |
+| Code | Six digits from `crypto.randomInt`, valid for ten minutes, five verification attempts, one use. Only an `scrypt` hash is stored in `customer_password_resets`; the plaintext exists only while the message is sent and is never logged. |
+| Throttle | One request per 60 seconds per customer, three per hour per customer and ten per hour per IP, all recorded on the reset row. A throttled request returns the same screen as a sent one. |
+| No enumeration | An unknown or account-less number returns `IGNORED` internally, but the browser always sees "if that number has an account, a code is on its way". A wrong, expired or missing code always returns the same sentence. |
+| Consent | The code is a transactional message the customer requested, so it is not gated by marketing consent. An `OPTED_OUT` marketing row does not block it; the throttle limits abuse. |
+| Template | `password_reset_otp`, category `AUTHENTICATION`, `bn`, with a Meta copy-code button. The adapter sends the code as the body variable and as the `copy_code` button parameter. The row ships `PENDING` and needs Meta approval before a live Cloud send. |
+| Sessions | A successful reset sets `passwordUpdatedAt`; any customer token issued before it (with a two-second tolerance) is rejected on the next request. A fresh sign-in works immediately. |
+| Recording | The reset row is consumed atomically before the password changes, so two requests holding the same code cannot both succeed. A successful reset consumes every active code for that customer. The WhatsApp history records that a code was sent, never the code itself. |
+| Messages | Delivery failure is recorded as a `FAILED` message with its error code. There is no retry queue for a one-time code; the customer asks again after the cooldown. |
+| Routes | `/account/forgot-password`, `/account/reset-password`, `requestPasswordResetAction`, `resetCustomerPasswordAction`, `src/lib/customer-auth/password-reset.ts`. |
+
+```text
+npm test                        → 188/188 (179 existing + 9 password-reset tests)
+npm run verify:password-reset   → 13/13 (against `next start`, real HTTP + database)
+  the forgot-password page renders for a guest
+  the reset page renders and explains the sent code
+  the login page links to the reset flow
+  an unknown number is ignored and stores nothing
+  requesting a code stores only a hash and a code-free message
+  a resend inside the cooldown is throttled
+  a wrong code is counted without changing the password
+  the old session is still valid before the password changes
+  a good code sets a new password and consumes every active code
+  the old password is rejected and the new one works
+  the session issued before the reset is rejected by the app
+  a fresh session opens the account and the reset banner shows
+  a signed-in customer is redirected away from the reset pages
+
+npx prisma migrate deploy       → 20261127110000_customer_password_reset applied
+npm run typecheck / lint / build → clean
+```
+
+### Design decisions locked in this module
+
+1. **The code is never stored in the clear.** Only a memory-hard `scrypt` hash
+   reaches the database, so a dump cannot be replayed as a reset.
+2. **The browser cannot learn who has an account.** Unknown numbers, wrong
+   codes and expired codes all lead to the same neutral sentence.
+3. **A wrong code still counts.** The transaction returns a failure and commits
+   the attempt counter; throwing inside it would roll the counter back and the
+   five-attempt rule would never fire.
+4. **The code is consumed before the password changes.** An atomic
+   `updateMany` on the unconsumed row makes a double-submit a single reset.
+5. **A password change ends older sessions.** `passwordUpdatedAt` is compared
+   with the token's `issuedAt`, with two seconds of tolerance for second-level
+   timestamps.
+6. **Requested messages are not marketing.** The code bypasses marketing consent
+   and is throttled instead, because blocking a locked-out customer would be
+   worse than the abuse it prevents.
+7. **A failed send is visible, not retried.** A one-time code that may already
+   be stale is not worth a retry queue; the row says `FAILED` and the customer
+   requests another after the cooldown.
+8. **Live sends still need Meta.** The template ships `PENDING`; the local
+   simulator can render it, but a live Cloud send waits for approval.
+
 ## Running it locally
 
 ```bash
@@ -1565,23 +1634,21 @@ check and is not supported by Next 16 or Prisma 7.
 
 Modules 4a (accounting), 4b (loyalty), 5a (storefront), 5b (shipping), 5c
 (financial statements), 6 (supplier settlement), 7 (engraving production), 8
-(dropshipping), 9 (customer accounts) and 10 (assistant) are built and
-approved. Module 4c (WhatsApp) is built and verified and waits only for the
-owner's approval and, for real sends, the Meta credentials:
+(dropshipping), 9 (customer accounts), 10 (assistant) and 4c (WhatsApp) are
+built and approved. Module 4d (customer password reset over WhatsApp) is built
+and verified and waits only for the owner's approval and, for real sends, the
+Meta credentials:
 
-1. **4c — WhatsApp (awaiting approval).** Official Cloud API only: order
-   confirmation, shipping and refund templates, online-checkout opt-in, delivery
-   receipts and a durable retry queue. The local simulator works today; live
-   sends need the WABA ID, phone number ID, access token, app secret, verify
-   token and Meta-approved template wording.
+1. **4d — customer password reset (awaiting approval).** A six-digit
+   WhatsApp code sets a new storefront password. The local simulator works
+   today; a live send needs `password_reset_otp` approved in the Meta console.
 
 The remaining backlog, each with its own gate: courier API adapters for Pathao,
-Steadfast and RedX; an automated customer password-reset channel (SMS or
-WhatsApp, once 4c exists); and a live AI provider key if the owner wants a
-language model instead of the deterministic rules engine. Dropshipping is
-complete for prepaid orders, so an online sale can now send the supplier order,
-ship direct and settle the supplier without a spreadsheet. COD dropship needs a
-remittance design before it can be offered.
+Steadfast and RedX; and a live AI provider key if the owner wants a language
+model instead of the deterministic rules engine. Dropshipping is complete for
+prepaid orders, so an online sale can now send the supplier order, ship direct
+and settle the supplier without a spreadsheet. COD dropship needs a remittance
+design before it can be offered.
 
 ## সংক্ষেপে
 
@@ -1724,9 +1791,9 @@ balance), হিসাবের তালিকা, খাতা (ledger), জ�
 ক্রেতার চেকআউটে অ্যাকাউন্টের নম্বরই বাধ্যতামূলকভাবে বসে, তাই পয়েন্ট বা অর্ডার
 অন্য নম্বরে যেতে পারে না; সংরক্ষিত ঠিকানা ফর্ম ভরে দেয় এবং নিট পণ্যমূল্যের
 সর্বোচ্চ ২০% পর্যন্ত পয়েন্ট খরচ করা যায়। ব্রাউজারে দেখানো সংখ্যা শুধু preview—
-বিক্রয়ের ভেতরে আসল ব্যালেন্স ও সীমা আবার যাচাই হয়। পাসওয়ার্ড ভুলে গেলে এখন
-দোকানে যোগাযোগ করে ম্যানুয়ালি রিসেট করাতে হয়; এসএমএস/হোয়াটসঅ্যাপ চ্যানেল
-এখনো নেই।
+বিক্রয়ের ভেতরে আসল ব্যালেন্স ও সীমা আবার যাচাই হয়। পাসওয়ার্ড ভুলে গেলে
+মডিউল ৪ডি-তে হোয়াটসঅ্যাপ কোড দিয়ে নিজেই রিসেট করা যায়; স্টাফও প্রয়োজনে
+ম্যানুয়ালি রিসেট করতে পারেন।
 
 মডিউল ১০-এ স্টাফ কনসোলের সহায়ক যুক্ত হয়েছে। এটি পণ্যের দাম ও স্টক, ডেলিভারি
 চার্জ এবং অর্ডারের অবস্থা সরাসরি ডেটাবেস থেকে বলে, আর চাইলে একটি **ড্রাফট**
@@ -1781,14 +1848,25 @@ POST-এর `X-Hub-Signature-256` ধ্রুব-সময়ের HMAC দি
 নিজের দোকানের পথ হতে পারে। খালি ব্যানার বাদ পড়ে, আর মুছে ফেলা স্লটের সারি
 `isActive = false` হয়ে থাকে—কিছুই হার্ড-ডিলিট হয় না।
 
-১৭৯টি ইউনিট ও ডেটাবেস টেস্ট, ১৫টি হোয়াটসঅ্যাপ HTTP যাচাই, ১১টি সহায়ক HTTP
+মডিউল ৪ডি-তে ক্রেতা নিজেই পাসওয়ার্ড রিসেট করতে পারেন। অ্যাকাউন্টের মোবাইল
+নম্বর দিলে হোয়াটসঅ্যাপে ছয় সংখ্যার কোড যায়; কোডটি ১০ মিনিট বৈধ, পাঁচবার
+চেষ্টা করা যায় এবং একবারই কাজ করে। ডেটাবেসে কোডের শুধু scrypt হ্যাশ থাকে—
+মেসেজের ইতিহাসেও মূল কোড লেখা হয় না। মিনিটে একবার, ঘণ্টায় তিনবার (ক্রেতা
+প্রতি) ও ঘণ্টায় দশবার (আইপি প্রতি) অনুরোধসীমা আছে; অজানা নম্বরেও একই
+"কোড পাঠানো হয়েছে" পর্দা দেখায়, তাই কে অ্যাকাউন্ট রাখে তা বোঝা যায় না।
+সফল রিসেটের পর আগের সেশনগুলো আর কাজ করে না। যে ক্রেতা মার্কেটিং বন্ধ
+করেছেন, তিনি চাইলে তবু কোড পাবেন—কারণ এটি তাঁর নিজের অনুরোধ করা লেনদেন-বার্তা।
+
+১৮৮টি ইউনিট ও ডেটাবেস টেস্ট, ১৫টি হোয়াটসঅ্যাপ HTTP যাচাই, ১৩টি পাসওয়ার্ড
+রিসেট HTTP যাচাই, ১১টি সহায়ক HTTP
 যাচাই, ১৫টি অ্যাকাউন্ট HTTP যাচাই, ১৪টি ড্রপশিপ HTTP যাচাই, ১১টি উৎপাদন HTTP
 যাচাই, ১১টি সরবরাহকারী নিষ্পত্তি HTTP যাচাই, ৮টি বিবরণী HTTP যাচাই, ১০টি চালান
 HTTP যাচাই, ১৪টি দোকান HTTP যাচাই, ৯টি লয়্যালটি HTTP যাচাই, ১২টি হিসাব যাচাই,
 ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই, ৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি
 ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি),
 লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬),
-উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার অ্যাকাউন্ট (৯) ও সহায়ক (১০) অনুমোদিত।
-হোয়াটসঅ্যাপ (৪সি) তৈরি ও যাচাই করা হয়েছে এবং আপনার অনুমোদনের অপেক্ষায়; আসল
-বার্তার জন্য শুধু Meta-র ক্রেডেনশিয়াল ও অনুমোদিত টেমপ্লেট দরকার।
+উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার অ্যাকাউন্ট (৯), সহায়ক (১০) ও হোয়াটসঅ্যাপ
+(৪সি) অনুমোদিত। পাসওয়ার্ড রিসেট (৪ডি) তৈরি ও যাচাই করা হয়েছে এবং আপনার
+অনুমোদনের অপেক্ষায়; আসল কোড পাঠাতে শুধু Meta-র ক্রেডেনশিয়াল ও অনুমোদিত
+`password_reset_otp` টেমপ্লেট দরকার।
 

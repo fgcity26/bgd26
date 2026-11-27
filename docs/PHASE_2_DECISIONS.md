@@ -335,6 +335,21 @@ irreversible except posted journals and stock history.
 | 223 | Permissions and navigation | `OWNER` and `MANAGER` have `whatsapp.*` through the wildcard. `CASHIER` has no WhatsApp permission by default. The console and every action re-check `whatsapp.read` or `whatsapp.write` on the server; the nav entry is gated by `whatsapp.read`. | Reading a customer conversation is sensitive. A cashier's counter job does not require it, and hiding a tab is never the guard. |
 | 224 | Verification data | Each HTTP run creates a product, variant, one owner and one cashier, a web order with online consent, then checks the inbox, queue, templates, consent, dedupe, opt-out skip, signed receipt, STOP keyword, retry backoff, pending-template refusal and worker secret. It archives the product, suspends the users and leaves orders and WhatsApp history as append-only records. | A fresh run must prove the real SQL and constraints, not a mock. The synthetic retry row is deleted so the cron never sends to a test number. |
 
+## 2s. Customer password reset over WhatsApp (Phase 3, module 4d)
+
+| # | Question | Default now | Why / how to change it |
+| --- | --- | --- | --- |
+| 225 | Module 4d scope | A storefront customer resets their own password with a WhatsApp code. No SMS gateway, no email reset and no staff takeover. | This closes the one gap left in module 9: a locked-out customer no longer has to find a staff member. WhatsApp already exists after 4c, so it needs no new vendor. |
+| 226 | Code | Six digits from `crypto.randomInt`, valid ten minutes, five verification attempts, one use. Only a `scrypt` hash is stored in `customer_password_resets`; the plaintext lives only while the message is sent. | Six digits are easy to read from a phone; a hash makes a database dump useless for a reset. One use plus an expiry bounds the window. |
+| 227 | Delivery | The code is sent as the `password_reset_otp` authentication template with a Meta copy-code button. The adapter sends the code as the body variable and as the `copy_code` button parameter. | Authentication templates are the category Meta expects for a login code and the button lets the customer copy it without retyping. |
+| 228 | No enumeration | An unknown or account-less number returns `IGNORED` internally, but the browser always sees the same "if that number has an account, a code is on its way" screen. A wrong, expired or missing code always returns one neutral sentence. | A different message would tell an attacker which numbers have accounts. The audit row keeps the real outcome for staff. |
+| 229 | Throttle | One request per 60 seconds per customer, three per hour per customer and ten per hour per IP. Every request is recorded on the reset row. | A code is expensive to guess and easy to spam. The cooldown protects a real customer from duplicate messages; the hourly caps limit abuse without locking the owner out. |
+| 230 | Consent | The code bypasses marketing consent because the customer requested it. An `OPTED_OUT` marketing row does not block it. | Blocking a password reset behind an old marketing opt-out would strand a locked-out customer. The throttle, not consent, is the abuse control here. |
+| 231 | Attempt counting | A wrong code increments the attempt counter, then the failure is reported after the transaction commits. | Throwing inside the transaction rolled the counter back in the first build; the verification script caught it. The five-attempt rule only works if the increment is durable. |
+| 232 | One use | The code is consumed with an atomic `updateMany` on the unconsumed row before the password changes, and a successful reset consumes every active code for that customer. | Two requests holding the same valid code must not both set a password. Consuming first makes the second one fail cleanly. |
+| 233 | Sessions | A reset sets `passwordUpdatedAt`; any customer token issued before it (two-second tolerance) is rejected on the next request, and a fresh sign-in works immediately. | A stolen cookie must not survive the password it was protected by. The small tolerance keeps a sign-in right after a password change from being logged out. |
+| 234 | Delivery failure | A failed send is recorded as a `FAILED` WhatsApp message with its error code. There is no retry queue for a one-time code. | A code that may already be stale is not worth retrying. The customer sees the neutral screen and requests another after the cooldown. |
+
 ## 3. What is still needed from you (non-blocking)
 
 These do not stop development, but they stop **go-live**:
@@ -343,8 +358,10 @@ These do not stop development, but they stop **go-live**:
 2. Bank, bKash and Nagad merchant numbers plus opening balances.
 3. Courier merchant credentials and pickup addresses.
 4. WhatsApp WABA ID, phone number ID, system-user access token, app secret,
-   verify token and Meta-approved template wording. Until they arrive the local
-   simulator is active; the business number `+1859180732` is already known.
+   verify token and Meta-approved template wording, including the
+   `password_reset_otp` authentication template with a copy-code button. Until
+   they arrive the local simulator is active; the business number `+1859180732`
+   is already known.
 5. Payment gateway live keys and refund policy confirmation.
 6. Legal text approval for the six policy pages.
 7. A Supabase Storage bucket (`bgd26-media`, public read for `gallery/`) once

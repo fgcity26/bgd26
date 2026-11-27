@@ -30,10 +30,11 @@ saved addresses, order history and online loyalty redemption — is complete and
 approved (22 Nov 2026). Phase 3 module 10 — a read-and-draft AI assistant with
 live product, delivery and order lookups — is complete and approved
 (26 Nov 2026). Phase 3 module 4c — official WhatsApp Cloud API notifications,
-consent, delivery receipts and a durable retry queue — is built and verified,
-awaiting owner approval; live sends wait only for Meta credentials and approved
-templates, while the local simulator works today. See
-`docs/PHASE_2_STATUS.md`.
+consent, delivery receipts and a durable retry queue — is complete and approved
+(27 Nov 2026); live sends wait only for Meta credentials and approved templates,
+while the local simulator works today. Phase 3 module 4d — self-service customer
+password reset over a WhatsApp code — is built and verified and awaits owner
+approval; the local simulator works today. See `docs/PHASE_2_STATUS.md`.
 
 ## Requirements
 
@@ -526,7 +527,9 @@ addresses prefill the form, and the points box allows spending up to
 `min(balance, 20 % of net merchandise)` through the same `quoteRedemption` /
 `redeemForOrder` engine as the counter. The browser figure is only a preview;
 the live balance and cap are re-checked inside the sale transaction. A forgotten
-password is reset manually by the shop until an SMS or WhatsApp channel exists.
+password is reset with a six-digit WhatsApp code from `/account/forgot-password`
+(module 4d); the code is stored only as a hash, expires in ten minutes and works
+once. Staff can still reset manually after checking the last order.
 
 ## AI assistant
 

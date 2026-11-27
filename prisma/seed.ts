@@ -10,7 +10,10 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { hashPin, hashSecret, isValidManagerPin } from "../src/lib/password";
-import { DEFAULT_TEMPLATES } from "../src/lib/whatsapp/templates";
+import {
+  DEFAULT_TEMPLATES,
+  PASSWORD_RESET_TEMPLATE,
+} from "../src/lib/whatsapp/templates";
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
@@ -487,6 +490,25 @@ async function main() {
       },
     });
   }
+  await prisma.whatsappTemplate.upsert({
+    where: {
+      name_language: {
+        name: PASSWORD_RESET_TEMPLATE.name,
+        language: PASSWORD_RESET_TEMPLATE.language,
+      },
+    },
+    update: {},
+    create: {
+      name: PASSWORD_RESET_TEMPLATE.name,
+      language: PASSWORD_RESET_TEMPLATE.language,
+      category: PASSWORD_RESET_TEMPLATE.category,
+      event: null,
+      bodyText: PASSWORD_RESET_TEMPLATE.bodyText,
+      headerText: PASSWORD_RESET_TEMPLATE.headerText,
+      footerText: PASSWORD_RESET_TEMPLATE.footerText,
+      variables: [],
+    },
+  });
 
   const counts = {
     permissions: await prisma.permission.count(),

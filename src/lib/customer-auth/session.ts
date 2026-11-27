@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { verifyCustomerSessionToken } from "@/lib/auth/token";
 import { readCustomerCookie } from "./cookies";
+import { sessionPredatesPasswordUpdate } from "./session-policy";
 
 export type CustomerUser = {
   id: string;
@@ -43,9 +44,17 @@ export const getCustomerSession = cache(async (): Promise<CustomerUser | null> =
       lastLoginAt: true,
       accountClaimedAt: true,
       status: true,
+      passwordUpdatedAt: true,
     },
   });
   if (!customer || customer.status !== "ACTIVE") return null;
+
+  // A password change or reset ends older sessions. Two seconds of tolerance
+  // covers the second-level timestamp in the token when a user signs in
+  // immediately after setting a password.
+  if (sessionPredatesPasswordUpdate(payload.issuedAt, customer.passwordUpdatedAt)) {
+    return null;
+  }
 
   return {
     id: customer.id,

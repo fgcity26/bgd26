@@ -887,6 +887,7 @@ model Customer {
   designApprovals DesignApproval[]
   waConversations WhatsappConversation[]
   waConsents      WhatsappConsent[]
+  passwordResets  CustomerPasswordReset[]
   customerLedgers CustomerLedger[]
   journalLines    JournalEntryLine[]
   aiConversations AiConversationLog[]
@@ -3031,6 +3032,28 @@ model WhatsappTemplate {
   @@index([status])
   @@index([event, status])
   @@map("whatsapp_templates")
+}
+
+/// A one-time password reset code. Only a scrypt hash is stored; the plaintext
+/// code lives in memory for the length of the send and is never logged.
+model CustomerPasswordReset {
+  id                    String    @id @default(cuid())
+  customerId            String
+  phoneNumberNormalized String    @db.VarChar(20)
+  codeHash              String
+  expiresAt             DateTime
+  attemptCount          Int       @default(0)
+  maxAttempts           Int       @default(5)
+  consumedAt            DateTime?
+  requestedIp           String?   @db.VarChar(64)
+  createdAt             DateTime  @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([phoneNumberNormalized, createdAt])
+  @@index([expiresAt])
+  @@map("customer_password_resets")
 }
 
 model WhatsappSetting {

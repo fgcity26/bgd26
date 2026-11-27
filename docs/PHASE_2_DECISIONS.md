@@ -335,7 +335,7 @@ irreversible except posted journals and stock history.
 | 223 | Permissions and navigation | `OWNER` and `MANAGER` have `whatsapp.*` through the wildcard. `CASHIER` has no WhatsApp permission by default. The console and every action re-check `whatsapp.read` or `whatsapp.write` on the server; the nav entry is gated by `whatsapp.read`. | Reading a customer conversation is sensitive. A cashier's counter job does not require it, and hiding a tab is never the guard. |
 | 224 | Verification data | Each HTTP run creates a product, variant, one owner and one cashier, a web order with online consent, then checks the inbox, queue, templates, consent, dedupe, opt-out skip, signed receipt, STOP keyword, retry backoff, pending-template refusal and worker secret. It archives the product, suspends the users and leaves orders and WhatsApp history as append-only records. | A fresh run must prove the real SQL and constraints, not a mock. The synthetic retry row is deleted so the cron never sends to a test number. |
 
-## 2s. Customer password reset over WhatsApp (Phase 3, module 4d)
+## 2s. Customer password reset over WhatsApp (Phase 3, module 4d, approved 27 November 2026)
 
 | # | Question | Default now | Why / how to change it |
 | --- | --- | --- | --- |

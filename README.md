@@ -33,8 +33,8 @@ live product, delivery and order lookups — is complete and approved
 consent, delivery receipts and a durable retry queue — is complete and approved
 (27 Nov 2026); live sends wait only for Meta credentials and approved templates,
 while the local simulator works today. Phase 3 module 4d — self-service customer
-password reset over a WhatsApp code — is built and verified and awaits owner
-approval; the local simulator works today. See `docs/PHASE_2_STATUS.md`.
+password reset over a WhatsApp code — is complete and approved (27 Nov 2026);
+the local simulator works today. See `docs/PHASE_2_STATUS.md`.
 
 ## Requirements
 

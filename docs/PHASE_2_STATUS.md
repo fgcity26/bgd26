@@ -98,15 +98,15 @@ send is recorded with its reason. The webhook verifies Meta's HMAC signature,
 updates delivery receipts monotonically and handles `STOP`/`START`. Live Cloud
 sends wait only for the Meta credentials and approved template wording.
 
-**Phase 3 module 4d built and verified (27 November 2026), awaiting owner
-approval.** Customers can now reset their own password from the storefront. They
-enter the mobile number on their account, receive a six-digit code on WhatsApp
-as an authentication template and use it once to set a new password. The code
-lives for ten minutes, allows five attempts and is stored only as a scrypt hash;
-the message history never contains it. Requests are throttled to one a minute,
-three an hour per customer and ten an hour per IP, an unknown number gets the
-same screen as a real one, and a successful reset ends older customer sessions.
-A stopped marketing consent does not block a code the customer asked for.
+**Phase 3 module 4d complete and approved (27 November 2026).** Customers can
+now reset their own password from the storefront. They enter the mobile number
+on their account, receive a six-digit code on WhatsApp as an authentication
+template and use it once to set a new password. The code lives for ten minutes,
+allows five attempts and is stored only as a scrypt hash; the message history
+never contains it. Requests are throttled to one a minute, three an hour per
+customer and ten an hour per IP, an unknown number gets the same screen as a
+real one, and a successful reset ends older customer sessions. A stopped
+marketing consent does not block a code the customer asked for.
 
 ## Module 1 — scaffold, database, seed
 
@@ -1524,7 +1524,7 @@ npx prisma migrate deploy       → 20261127100000_whatsapp_notifications applie
 9. **A cashier does not need customer conversations.** WhatsApp access starts
    with owner and manager; it is not granted by the order permissions.
 
-## Phase 3, module 4d — customer password reset over WhatsApp (built 27 November 2026, awaiting approval)
+## Phase 3, module 4d — customer password reset over WhatsApp (approved 27 November 2026)
 
 | Area | Detail |
 | --- | --- |
@@ -1634,21 +1634,15 @@ check and is not supported by Next 16 or Prisma 7.
 
 Modules 4a (accounting), 4b (loyalty), 5a (storefront), 5b (shipping), 5c
 (financial statements), 6 (supplier settlement), 7 (engraving production), 8
-(dropshipping), 9 (customer accounts), 10 (assistant) and 4c (WhatsApp) are
-built and approved. Module 4d (customer password reset over WhatsApp) is built
-and verified and waits only for the owner's approval and, for real sends, the
-Meta credentials:
+(dropshipping), 9 (customer accounts), 10 (assistant), 4c (WhatsApp) and 4d
+(customer password reset) are built and approved.
 
-1. **4d — customer password reset (awaiting approval).** A six-digit
-   WhatsApp code sets a new storefront password. The local simulator works
-   today; a live send needs `password_reset_otp` approved in the Meta console.
-
-The remaining backlog, each with its own gate: courier API adapters for Pathao,
-Steadfast and RedX; and a live AI provider key if the owner wants a language
-model instead of the deterministic rules engine. Dropshipping is complete for
-prepaid orders, so an online sale can now send the supplier order, ship direct
-and settle the supplier without a spreadsheet. COD dropship needs a remittance
-design before it can be offered.
+The remaining backlog, each with its own gate: live courier API adapters for
+Pathao, Steadfast and RedX (the manual courier books exist today); and a live AI
+provider key if the owner wants a language model instead of the deterministic
+rules engine. Dropshipping is complete for prepaid orders, so an online sale can
+now send the supplier order, ship direct and settle the supplier without a
+spreadsheet. COD dropship needs a remittance design before it can be offered.
 
 ## সংক্ষেপে
 
@@ -1865,8 +1859,7 @@ HTTP যাচাই, ১৪টি দোকান HTTP যাচাই, ৯ট�
 ১৩টি বিক্রয় যাচাই, ৯টি স্টক যাচাই, ৯টি ক্রয় যাচাই, ৯টি লগইন যাচাই, ৮টি
 ক্যাটালগ যাচাই, ৮টি CRM/CMS যাচাই ও ১০টি ডেটাবেস নিয়ম যাচাই সফল। চালান (৫বি),
 লয়্যালটি (৪বি), হিসাব (৪এ), আর্থিক বিবরণী (৫সি), সরবরাহকারী নিষ্পত্তি (৬),
-উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার অ্যাকাউন্ট (৯), সহায়ক (১০) ও হোয়াটসঅ্যাপ
-(৪সি) অনুমোদিত। পাসওয়ার্ড রিসেট (৪ডি) তৈরি ও যাচাই করা হয়েছে এবং আপনার
-অনুমোদনের অপেক্ষায়; আসল কোড পাঠাতে শুধু Meta-র ক্রেডেনশিয়াল ও অনুমোদিত
-`password_reset_otp` টেমপ্লেট দরকার।
+উৎপাদন (৭), ড্রপশিপ (৮), ক্রেতার অ্যাকাউন্ট (৯), সহায়ক (১০), হোয়াটসঅ্যাপ
+(৪সি) ও পাসওয়ার্ড রিসেট (৪ডি) অনুমোদিত। আসল কোড পাঠাতে শুধু Meta-র
+ক্রেডেনশিয়াল ও অনুমোদিত `password_reset_otp` টেমপ্লেট দরকার।
 
